@@ -1,22 +1,22 @@
 ;
 ; LCD1602-HD44780-AVR
-; БИБЛИОТЕКА ДЛЯ ВЗАИМОДЕЙСТВИЯ С МОНОХРОМНЫМ ЖК ДИСПЛЕЕМ LCD1602 НА БАЗЕ КОНТРОЛЛЕРА HD44780.
+; Библиотека для взаимодействия с монохромным жк дисплеем LCD1602 на базе контроллера HD44780.
 ;
-; Copyright (c) 2024 IGOR VOYTENKO <igor.240340@gmail.com>
+; Copyright (c) 2024 Igor Voytenko <igor.240340@gmail.com>
 ;
-; УПРАВЛЕНИЕ ОСУЩЕСТВЛЯЕТСЯ ЧЕРЕЗ PORTC.
-; ЗАПИСЬ/ЧТЕНИЕ ДАННЫХ/ИНСТРУКЦИЙ ОСУЩЕСТВЛЯЕТСЯ ЧЕРЕЗ PORTB (В ПОЛНОМ - 8-БИТНОМ РЕЖИМЕ).
-; ВЗАИМОДЕЙСТВИЕ ПРОИСХОДИТ В СИНХРОННОМ РЕЖИМЕ, С ОЖИДАНИЕМ СБРОСА ФЛАГА BUSY.
-            .EQU BUSYFLAG=7                 ; НОМЕР БИТА В PORTB, НА КОТОРОМ ОЖИДАЕТСЯ ЗНАЧЕНИЕ ФЛАГА BUSY.
+; Управление осуществляется через portc.
+; Запись/чтение данных/инструкций осуществляется через PORTB (в полном - 8-битном режиме).
+; Взаимодействие происходит в синхронном режиме, с ожиданием сброса busy-флага.
+            .EQU BUSYFLAG=7                 ; Номер бита в PORTB, на котором ожидается значение флага busy.
             
-            .EQU CLEARDISP=0x01             ; КОД ИНСТРУКЦИИ CLEAR DISPLAY.
+            .EQU CLEARDISP=0x01             ; Код инструкции Clear Display.
             
-            .EQU ENTRMODE=0x04              ; КОД ИНСТРУКЦИИ ENTRY MODE SET.
-            .EQU CURSINC=0x02               ; НАПРАВЛЕНИЕ ДВИЖЕНИЯ КУРСОРА - СЛЕВА НАПРАВО.
-            .EQU CURSDEC=0x00               ; НАПРАВЛЕНИЕ ДВИЖЕНИЯ КУРСОРА - СПРАВА НАЛЕВО.
-            .EQU DISPCURSHFT=0x01           ; СДВИГАТЬ ДИСПЛЕЙ ВМЕСТЕ С КУРСОРОМ.
+            .EQU ENTRMODE=0x04              ; Код инструкции Entry Mode Set.
+            .EQU CURSINC=0x02               ; Направление движения курсора - слева направо.
+            .EQU CURSDEC=0x00               ; Направление движения курсора - справа налево.
+            .EQU DISPCURSHFT=0x01           ; Сдвигать дисплей вместе с курсором.
 
-            .EQU DISPCTRL=0x08              ; КОД ИНСТРУКЦИИ DISPLAY ON/OFF CONTROL.
+            .EQU DISPCTRL=0x08              ; Код инструкции Display On/Off Control.
             .EQU DISPON=0x04                ;
             .EQU DISPOFF=0x00               ;
             .EQU CURSON=0x02                ;
@@ -24,59 +24,62 @@
             .EQU CURSBLNKON=0x01            ;
             .EQU CURSBLNKOFF=0x00           ;
 
-            .EQU CURDISPSHFT=0x10           ; КОД ИНСТРУКЦИИ CURSOR OR DISPLAY SHIFT.
-            .EQU SHFTDSPLY=0x08             ; СДВИГ ДИСПЛЕЯ.
-            .EQU SHFTDIRLFT=0x00            ; СДВИГ ДИСПЛЕЯ ВЛЕВО.
-            .EQU SHFTDIRRGHT=0x04           ; СДВИГ ДИСПЛЕЯ ВПРАВО.
+            .EQU CURDISPSHFT=0x10           ; Код инструкции Cursor or Display Shift.
+            .EQU SHFTDSPLY=0x08             ; Сдвиг дисплея.
+            .EQU SHFTDIRLFT=0x00            ; Сдвиг дисплея влево.
+            .EQU SHFTDIRRGHT=0x04           ; Сдвиг дисплея вправо.
 
-            .EQU FUNCSET=0x20               ; КОД ИНСТРУКЦИИ FUNCTION SET.
-            .EQU DATLEN8=0x10               ; РЕЖИМ ПЕРЕДАЧИ ДАННЫХ - 8-BIT.
-            .EQU DATLEN4=0x00               ; РЕЖИМ ПЕРЕДАЧИ ДАННЫХ - 4-BIT.
-            .EQU DISPLINES2=0x08            ; КОЛИЧЕСТВО СТРОК - ДВЕ.
-            .EQU DISPLINES1=0x00            ; КОЛИЧЕСТВО СТРОК - ОДНА.
-            .EQU FONT5X10=0x04              ; ШРИФТ 5 НА 10 ТОЧЕК.
-            .EQU FONT5X8=0x00               ; ШРИФТ 5 НА 8 ТОЧЕК.
+            .EQU FUNCSET=0x20               ; Код инструкции Function Set.
+            .EQU DATLEN8=0x10               ; Режим передачи данных - 8-bit.
+            .EQU DATLEN4=0x00               ; Режим передачи данных - 4-bit.
+            .EQU DISPLINES2=0x08            ; Количество строк - две.
+            .EQU DISPLINES1=0x00            ; Количество строк - одна.
+            .EQU FONT5X10=0x04              ; Шрифт 5 на 10 точек.
+            .EQU FONT5X8=0x00               ; Шрифт 5 на 8 точек.
                         
-            .EQU SETDDADDR=0x80             ; КОД ИНСТРУКЦИИ SET DDRAM ADDRESS.
-            .EQU L1BEGADDR=0x00             ; АДРЕС НАЧАЛА ПЕРВОЙ СТРОКИ В DDRAM.
-            .EQU L1ENDADDR=0x0F             ; АДРЕС ПОСЛЕДНЕГО ВИДИМОГО СИМВОЛА ПЕРВОЙ СТРОКИ В DDRAM.
-            .EQU L2BEGADDR=0x40             ; АДРЕС НАЧАЛА ВТОРОЙ СТРОКИ В DDRAM.
+            .EQU SETDDADDR=0x80             ; Код инструкции Set DDRAM Address.
+            .EQU L1BEGADDR=0x00             ; Адрес начала первой строки в DDRAM.
+            .EQU L1ENDADDR=0x0F             ; Адрес последнего видимого символа первой строки в DDRAM.
+            .EQU L2BEGADDR=0x40             ; Адрес начала второй строки в DDRAM.
 
             .EQU SYSCONF=(FUNCSET|DATLEN8|DISPLINES2|FONT5X8)
             .EQU DISPCONF=(DISPCTRL|DISPON|CURSON|CURSBLNKON)
             
-            .DEF CHAR=R0                    ; ЗДЕСЬ ОЖИДАЕТСЯ СИМВОЛ, ВЫВОДИМЫЙ PRNTCHR.
+            .DEF CHAR=R0                    ; Здесь ожидается символ, выводимый PRNTCHR.
 
             ;
-            ; ИНИЦИАЛИЗАЦИЯ LCD.
-INITLCD:    LDI R16,0b00000111              ; НАСТРОЙКА ЛИНИИ УПРАВЛЕНИЯ.
-            OUT DDRC,R16                    ; E,RW,RS - НА ВЫХОД.
+            ; Инициализация LCD.
+INITLCD:    LDI R16,0b00000111              ; Настройка линии управления.
+            OUT DDRC,R16                    ; E,RW,RS - на выход.
 
-            LDI R16,0xFF                    ; НАСТРОЙКА ЛИНИИ ДАННЫХ.
-            OUT DDRB,R16                    ; D0-D7 - НА ВЫХОД.
+            LDI R16,0xFF                    ; Настройка линии данных.
+            OUT DDRB,R16                    ; D0-D7 - на выход.
 
-            RCALL DELAY20MS                 ; ЖДЕМ БОЛЬШЕ 15MS ПО ДАТАШИТУ.
+            RCALL DELAY20MS                 ; Ждем больше 15ms по даташиту.
 
-            LDI R16,(FUNCSET|DATLEN8)       ; НАСТРОЙКА 8-БИТНОГО РЕЖИМА ПЕРЕДАЧИ.
+            LDI R16,(FUNCSET|DATLEN8)       ; Настройка 8-битного режима передачи.
             OUT PORTB,R16                   ;
             RCALL EPULSECMD                 ;
-            RCALL DELAY5MS                  ; ЖДЕМ БОЛЬШЕ 4.1MS ПО ДАТАШИТУ.
+;            RCALL DELAY5MS                  ; Ждем больше 4.1ms по даташиту.
 
-            LDI R16,(FUNCSET|DATLEN8)       ; ПОВТОР ПРЕДЫДУЩЕЙ ИНСТРУКЦИИ ПО ДАТАШИТУ.
-            OUT PORTB,R16                   ;
-            RCALL EPULSECMD                 ;
-            RCALL DELAY110US                ; ЖДЕМ БОЛЬШЕ 100US ПО ДАТАШИТУ.
+;            LDI R16,(FUNCSET|DATLEN8)       ; Повтор предыдущей инструкции по даташиту.
+;            OUT PORTB,R16                   ;
+;            RCALL EPULSECMD                 ;
+;            RCALL DELAY110US                ; Ждем больше 100us по даташиту.
 
-            LDI R16,(FUNCSET|DATLEN8)       ; ЕЩЁ ОДИН ПОВТОР ПРЕДЫДУЩЕЙ ИНСТРУКЦИИ ПО ДАТАШИТУ.
-            OUT PORTB,R16                   ;
-            RCALL EPULSECMD                 ;
+;            LDI R16,(FUNCSET|DATLEN8)       ; Ещё один повтор предыдущей инструкции по даташиту.
+;            OUT PORTB,R16                   ;
+;            RCALL EPULSECMD                 ;
+; Note: даташит рекомендует при инициализации повторить первую инструкцию
+; с указанными таймингами, но на практике контроллер LCD может "завестись" и с первого раза.
+; Если будут проблемы - попробуйте раскомментировать этот код.
 
-            RCALL WAITBUSY                  ; НАСТРОЙКА ШИРИНЫ ИНТЕРФЕЙСА, КОЛИЧЕСТВА СТРОК, РАЗМЕРА ШРИФТА.
+            RCALL WAITBUSY                  ; Настройка ширины интерфейса, количества строк, размера шрифта.
             LDI R16,SYSCONF                 ;
             OUT PORTB,R16                   ;
             RCALL EPULSECMD                 ;
 
-            RCALL WAITBUSY                  ; ВКЛЮЧЕНИЕ ДИСПЛЕЯ, НАСТРОЙКИ КУРСОРА.
+            RCALL WAITBUSY                  ; Включение дисплея, настройки курсора.
             LDI R16,DISPCONF                ;
             OUT PORTB,R16                   ;
             RCALL EPULSECMD                 ;
@@ -86,7 +89,7 @@ INITLCD:    LDI R16,0b00000111              ; НАСТРОЙКА ЛИНИИ УП
             OUT PORTB,R16                   ;
             RCALL EPULSECMD                 ;
 
-            RCALL WAITBUSY                  ; ДВИЖЕНИЕ КУРСОРА ВПРАВО ПРИ ВВОДЕ, БЕЗ СДВИГА ДИСПЛЕЯ.
+            RCALL WAITBUSY                  ; Движение курсора вправо при вводе, без сдвига дисплея.
             LDI R16,(ENTRMODE|CURSINC)      ;
             OUT PORTB,R16                   ;
             RCALL EPULSECMD                 ;
@@ -94,27 +97,27 @@ INITLCD:    LDI R16,0b00000111              ; НАСТРОЙКА ЛИНИИ УП
             RET                             ;
             
             ;
-            ; ВЫВОДИТ НА ЭКРАН ОДИН СИМВОЛ, ХРАНЯЩИЙСЯ В РЕГИСТРЕ CHAR.
+            ; Выводит на экран один символ, хранящийся в регистре CHAR.
 PRNTCHR:    RCALL WAITBUSY                  ;
             OUT PORTB,CHAR                  ;
             RCALL EPULSEDAT                 ;
             RET                             ;
 
             ;
-            ; ВЫВОД НА ЭКРАН СИМВОЛОВ СТРОКИ ИЗ SRAM.
+            ; Вывод на экран символов строки из SRAM.
             ;
-            ; АДРЕС СТРОКИ В SRAM ОЖИДАЕТСЯ В XH:XL.
+            ; Адрес строки в SRAM ожидается в XH:XL.
 PRNTSTR:    LD CHAR,X+                      ;
-            AND CHAR,CHAR                   ; КОНЕЦ СТРОКИ?
-            BREQ ENDPRNTSTR                 ; ДА, ВЫВЕЛИ ВСЮ СТРОКУ.
+            AND CHAR,CHAR                   ; Конец строки?
+            BREQ ENDPRNTSTR                 ; Да, вывели всю строку.
 
-            RCALL PRNTCHR                   ; НЕТ, ВЫВОДИМ СИМВОЛ.
+            RCALL PRNTCHR                   ; Нет, выводим символ.
             RJMP PRNTSTR                    ;
 
 ENDPRNTSTR: RET                             ;
 
             ;
-            ; ПЕРЕМЕЩЕНИЕ КУРСОРА В НАЧАЛО ПЕРВОЙ СТРОКИ.
+            ; Перемещение курсора в начало первой строки.
 CURSL1BEG:  RCALL WAITBUSY
             LDI R16,(SETDDADDR|L1BEGADDR)
             OUT PORTB,R16
@@ -122,7 +125,7 @@ CURSL1BEG:  RCALL WAITBUSY
             RET
 
             ;
-            ; ПЕРЕМЕЩЕНИЕ КУРСОРА В НАЧАЛО ВТОРОЙ СТРОКИ.
+            ; Перемещение курсора в начало второй строки.
 CURSL2BEG:  RCALL WAITBUSY
             LDI R16,(SETDDADDR|L2BEGADDR)
             OUT PORTB,R16
@@ -130,7 +133,7 @@ CURSL2BEG:  RCALL WAITBUSY
             RET
 
             ;
-            ; ПЕРЕМЕЩЕНИЕ КУРСОРА В КОНЕЦ ПЕРВОЙ СТРОКИ (В КОНЕЦ ВИДИМОЙ ЧАСТИ).
+            ; Перемещение курсора в конец первой строки (в конец видимой части).
 CURSL1END:  RCALL WAITBUSY
             LDI R16,(SETDDADDR|L1ENDADDR)
             OUT PORTB,R16
@@ -138,7 +141,7 @@ CURSL1END:  RCALL WAITBUSY
             RET
 
             ;
-            ; ОЧИСТКА ЭКРАНА И ВОЗВРАТ КУРСОРА В НАЧАЛО ПЕРВОЙ СТРОКИ.
+            ; Очистка экрана и возврат курсора в начало первой строки.
 CLEARLCD:   RCALL WAITBUSY
             LDI R16,CLEARDISP
             OUT PORTB,R16
@@ -146,7 +149,7 @@ CLEARLCD:   RCALL WAITBUSY
             RET
 
             ;
-            ; СКРЫТИЕ КУРСОРА.
+            ; Скрытие курсора.
 DSBLCURS:   RCALL WAITBUSY
             LDI R16,(DISPCTRL|DISPON|CURSOFF|CURSBLNKOFF)
             OUT PORTB,R16
@@ -154,7 +157,7 @@ DSBLCURS:   RCALL WAITBUSY
             RET
 
             ;
-            ; ПОКАЗ МИГАЮЩЕГО КУРСОРА.
+            ; Показ мигающего курсора.
 ENBLCURS:   RCALL WAITBUSY
             LDI R16,(DISPCTRL|DISPON|CURSON|CURSBLNKON)
             OUT PORTB,R16
@@ -162,7 +165,7 @@ ENBLCURS:   RCALL WAITBUSY
             RET
 
             ;
-            ; СДВИГ ДИСПЛЕЯ ВЛЕВО НА ОДНУ ПОЗИЦИЮ.
+            ; Сдвиг дисплея влево на одну позицию.
 SHFTLFT:    RCALL WAITBUSY
             LDI R16,(CURDISPSHFT|SHFTDSPLY|SHFTDIRLFT)
             OUT PORTB,R16
@@ -170,7 +173,7 @@ SHFTLFT:    RCALL WAITBUSY
             RET
 
             ;
-            ; СДВИГ ДИСПЛЕЯ ВПРАВО НА ОДНУ ПОЗИЦИЮ.
+            ; Сдвиг дисплея вправо на одну позицию.
 SHFTRGHT:   RCALL WAITBUSY
             LDI R16,(CURDISPSHFT|SHFTDSPLY|SHFTDIRRGHT)
             OUT PORTB,R16
@@ -178,80 +181,86 @@ SHFTRGHT:   RCALL WAITBUSY
             RET
 
             ;
-            ; ФОРМИРОВАНИЕ ИМПУЛЬСА ГОТОВНОСТИ ДАННЫХ В СЛУЧАЕ ВЫПОЛНЕНИЯ ИНСТРУКЦИИ.
+            ; Формирование импульса готовности данных в случае выполнения инструкции.
 EPULSECMD:  LDI R16,0b00000100              ;
             OUT PORTC,R16                   ;
+            NOP                             ; Длительность импульса - 500ns.
+            NOP                             ; По даташиту - не менее 400ns.
+            NOP                             ;
+            NOP                             ;
             LDI R16,0b00000000              ;
             OUT PORTC,R16                   ;
             RET                             ;
 
             ;
-            ; ФОРМИРОВАНИЕ ИМПУЛЬСА ГОТОВНОСТИ ДАННЫХ В СЛУЧАЕ ПЕРЕДАЧИ ДАННЫХ.
+            ; Формирование импульса готовности данных в случае передачи данных.
 EPULSEDAT:  LDI R16,0b00000101              ;
             OUT PORTC,R16                   ;
+            NOP                             ;
+            NOP                             ;
+            NOP                             ;
+            NOP                             ;
             LDI R16,0b00000001              ;
             OUT PORTC,R16                   ;
             RET                             ;
 
             ;
-            ; СИНХРОННОЕ ОЖИДАНИЕ ГОТОВНОСТИ LCD ПРИНЯТЬ НОВУЮ КОМАНДУ.
+            ; Синхронное ожидание готовности LCD принять новую команду.
             ;
-            ; NOTE: В СЛУЧАЕ НЕПОЛАДКИ НА СТОРОНЕ КОНТРОЛЛЕРА LCD ЭТА ПОДПРОГРАММА МОЖЕТ ОСТАТЬСЯ В БЕСКОНЕЧНОМ ЦИКЛЕ.
-            ; В КАЧЕСТВЕ МЕРЫ ПРЕДОСТОРОЖНОСТИ МОЖНО ИСПОЛЬЗОВАТЬ СТОРОЖЕВОЙ ТАЙМЕР.
-WAITBUSY:   LDI R16,0                       ; ПЕРЕКЛЮЧАЕМ PORTB НА ВХОД.
+            ; Note: в случае неполадки на стороне контроллера LCD эта подпрограмма может остаться в бесконечном цикле.
+            ; В качестве меры предосторожности можно использовать сторожевой таймер.
+WAITBUSY:   LDI R16,0                       ; Переключаем PORTB на вход.
             OUT DDRB,R16                    ;
 
-REPEAT0:    LDI R16,0b00000110              ; ФОРМИРУЕМ ИМПУЛЬС НА E.
+REPEAT0:    LDI R16,0b00000110              ; Формируем импульс на E.
             OUT PORTC,R16                   ;
-
-            IN R17,PINB                     ;
+            NOP                             ; Удерживаем импульс E не менее 400ns.
+            NOP                             ;
+            NOP                             ;
+            NOP                             ;
+            
+            IN R17,PINB                     ; Чтение доступно только пока удерживается импульс E.
 
             LDI R16,0b00000010              ;
             OUT PORTC,R16                   ;
 
-            SBRC R17,BUSYFLAG               ; BUSY-ФЛАГ СБРОШЕН?
-            RJMP REPEAT0                    ; НЕТ, ОЖИДАЕМ.
+            SBRC R17,BUSYFLAG               ; Busy-флаг сброшен?
+            RJMP REPEAT0                    ; Нет, ожидаем.
 
-            LDI R16,0xFF                    ; ДА, LCD ГОТОВ К ВЗАИМОДЕЙСТВИЮ.
-            OUT DDRB,R16                    ; ПЕРЕКЛЮЧАЕМ PORTB НА ВЫХОД.
+            LDI R16,0xFF                    ; Да, LCD готов к взаимодействию.
+            OUT DDRB,R16                    ; Переключаем PORTB обратно - на выход.
             RET                             ;
 
             ;
-            ; ЗАДЕРЖКА 110US (16MHz).
-            ; NOTE: ASSEMBLY CODE AUTO-GENERATED BY UTILITY FROM BRET MULVEY.
-DELAY110US: LDI R16,3
-            LDI R17,70
-D0:         DEC R17
-            BRNE D0
+            ; Задержка 110us (8MHz).
+            ; Note: assembly code auto-generated by utility from Bret Mulvey.
+DELAY110US: LDI R16,2
+            LDI R17,33
+L0:         DEC R17
+            BRNE L0
             DEC R16
-            BRNE D0
+            BRNE L0
             NOP
             RET
 
             ;
-            ; ЗАДЕРЖКА 5MS (16MHz). ИСПОЛЬЗУЕТ R16,R17.
-            ; NOTE: ASSEMBLY CODE AUTO-GENERATED BY UTILITY FROM BRET MULVEY.
-DELAY5MS:   LDI R16,104
-            LDI R17,226
-D1:         DEC R17
-            BRNE D1
+            ; Задержка 5ms (8MHz).
+            ; Note: assembly code auto-generated by utility from Bret Mulvey.
+DELAY5MS:   LDI R16,52
+            LDI R17,240
+L1:         DEC R17
+            BRNE L1
             DEC R16
-            BRNE D1
-            RJMP PC+1
-            NOP
+            BRNE L1
             RET
 
             ;
-            ; ЗАДЕРЖКА 20ms (16MHz). ИСПОЛЬЗУЕТ R16,R17,R18.
-            ; NOTE: ASSEMBLY CODE AUTO-GENERATED BY UTILITY FROM BRET MULVEY.
-DELAY20MS:  LDI R16,2
-            LDI R17,160
-            LDI R18,145
-D2:         DEC R18
-            BRNE D2
-            DEC  R17
-            BRNE D2
-            DEC  R16
-            BRNE D2
-            NOP
+            ; Задержка 20ms (8MHz).
+            ; Note: assembly code auto-generated by utility from Bret Mulvey.
+DELAY20MS:  LDI R16,208
+            LDI R17,200
+L2:         DEC R17
+            BRNE L2
+            DEC R16
+            BRNE L2
             RET
