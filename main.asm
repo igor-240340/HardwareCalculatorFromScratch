@@ -168,7 +168,10 @@ S1:         LDI R16,'C'                     ;
             LDI R16,0xF0                    ; '+','-','*','/' В ASCII ИМЕЮТ ОДИНАКОВЫЙ СТАРШИЙ ПОЛУБАЙТ РАВНЫЙ 0x20.
             AND R16,KEY                     ; А '.' МЫ УЖЕ ИСКЛЮЧИЛИ ВЫШЕ.
             LDI R17,0x20                    ;
-            EOR R16,R17                     ; KEY=['+','-','*','/']?
+            EOR R16,R17                     ; KEY=['+','-','/']?
+            BREQ S1OPERATOR                 ;
+            LDI R16,'x'                     ; Мы заменили символ умножения на 'x', который находится в последней строке ASCII-таблицы.
+            EOR R16,KEY                     ; KEY='x'?
             BREQ S1OPERATOR                 ;
 
             LDI R16,LOW(S1)                 ;
@@ -547,7 +550,7 @@ OPCHK:      LDI R17,'+'                     ;
             EOR R17,R16                     ;
             BREQ CALCSUB                    ;
 
-            LDI R17,'*'                     ;
+            LDI R17,'x'                     ;
             EOR R17,R16                     ;
             BREQ CALCMUL                    ;
 
@@ -715,7 +718,10 @@ S4:         LDI R16,'C'                     ;
             LDI R16,0xF0                    ;
             AND R16,KEY                     ;
             LDI R17,0x20                    ;
-            EOR R16,R17                     ; KEY=['+','-','*','/']?
+            EOR R16,R17                     ; KEY=['+','-','/']?
+            BREQ S4OPERATOR                 ;
+            LDI R16,'x'                     ;
+            EOR R16,KEY                     ; KEY='x'?
             BREQ S4OPERATOR                 ;
 
 S4SKIP:     LDI R16,LOW(S4)                 ; ИГНОРИРУЕМ НАЖАТИЕ, ОСТАЁМСЯ В ТЕКУЩЕМ СОСТОЯНИИ.
@@ -801,7 +807,10 @@ S5:         LDI R16,'C'                     ;
             LDI R16,0xF0                    ; ВЫШЕ МЫ ИСКЛЮЧИЛИ ТОЧКУ,
             AND R16,KEY                     ; ПОСКОЛЬКУ ОНА ТОЖЕ ИМЕЕТ 0x20 В ASCII В СТАРШЕМ БАЙТЕ.
             LDI R17,0x20                    ;
-            EOR R16,R17                     ; KEY=['+','-','*','/']?
+            EOR R16,R17                     ; KEY=['+','-','/']?
+            BREQ S5OPERATOR                 ;
+            LDI R16,'x'                     ;
+            EOR R16,KEY                     ; KEY='x'?
             BREQ S5OPERATOR                 ;
 
 S5SKIP:     LDI R16,LOW(S5)                 ;
@@ -872,14 +881,12 @@ RESET:      LDI YL,LOW(SP)                  ;
 ; ЭТО НУЖНО ДЛЯ ВЫСТАВЛЕНИЯ ДАННЫХ НА ПОРТУ И ПРОГРАММНОГО ВЫЗОВА ПРЕРЫВАНИЯ ПРЯМО ИЗ ЭТОГО КОДА.
 .IFDEF EMULKEYPD
             SER R16                         ; НАСТРАИВАЕМ ПОРТ D НА ВЫХОД,
-            OUT DDRD,R16                    ; ЧТОБЫ ПРОГРАММНО ВЫСТАВЛЯТЬ КОД КЛАВИШИ И
-            LDI R16,0x00                    ; ИНИЦИИРОВАТЬ ПРЕРЫВАНИЕ ПО INT0.
+            OUT DDRD,R16                    ; ЧТОБЫ ПРОГРАММНО ВЫСТАВЛЯТЬ КОД КЛАВИШИ И ИНИЦИИРОВАТЬ ПРЕРЫВАНИЕ ПО INT0.
+            LDI R16,0x00                    ;
             OUT PORTD,R16                   ;
 .ELSE
             CLR R16                         ;
             OUT DDRD,R16                    ;
-            LDI R16,0xFF                    ;
-            OUT PORTD,R16                   ;
 .ENDIF
 
             LDI R16,(1<<ISC01|1<<ISC00)     ; РАЗРЕШАЕМ ВНЕШНИЕ ПРЕРЫВАНИЯ
@@ -888,8 +895,8 @@ RESET:      LDI YL,LOW(SP)                  ;
             OUT EIMSK,R16                   ;
             SEI                             ;
 
-            LDI ZL,LOW(KEYMAPPRG << 1)      ; ЧИТАЕМ ТАБЛИЦУ ASCII-КОДОВ КЛАВИШ В SRAM.
-            LDI ZH,HIGH(KEYMAPPRG << 1)     ;
+            LDI ZL,LOW(KEYMAPPRG<<1)        ; ЧИТАЕМ ТАБЛИЦУ ASCII-КОДОВ КЛАВИШ В SRAM.
+            LDI ZH,HIGH(KEYMAPPRG<<1)       ;
             LDI XL,LOW(KEYMAP)              ;
             LDI XH,HIGH(KEYMAP)             ;
 READ:       LPM R0,Z+                       ;
@@ -992,7 +999,7 @@ END:        RJMP END
 
 ;
 ; ТАБЛИЦА ASCII-КОДОВ НАЖАТЫХ КЛАВИШ.
-KEYMAPPRG:  .DB "C0./123*456-789+",0
+KEYMAPPRG:  .DB "C0./789x456-123+",0
 
 ;
 ; ТЕСТОВЫЕ ПРИМЕРЫ ДЛЯ ПРОВЕРКИ КОРРЕКТНОГО ВВОДА С КЛАВИАТУРЫ.

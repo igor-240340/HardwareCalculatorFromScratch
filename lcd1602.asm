@@ -9,6 +9,17 @@
 ; Взаимодействие происходит в синхронном режиме, с ожиданием сброса busy-флага.
             .EQU BUSYFLAG=7                 ; Номер бита в PORTB, на котором ожидается значение флага busy.
             
+            .EQU EH=0b00000100              ; Enable pulse high.
+            .EQU EL=0b00000000              ; Enable pulse low.
+            .EQU INSTREG=0b00000000         ; Выбор регистра инструкций в LCD.
+            .EQU DATREG=0b00000001          ; Выбор регистра данных в LCD.
+            .EQU R=0b00000010               ; Чтение данных из LCD.
+            .EQU W=0b00000000               ; Запись данных в LCD.
+
+            .EQU RS=0b00000001              ; Пины линии управления.
+            .EQU RW=0b00000010              ;
+            .EQU E=0b00000100               ;
+            
             .EQU CLEARDISP=0x01             ; Код инструкции Clear Display.
             
             .EQU ENTRMODE=0x04              ; Код инструкции Entry Mode Set.
@@ -49,8 +60,8 @@
 
             ;
             ; Инициализация LCD.
-INITLCD:    LDI R16,0b00000111              ; Настройка линии управления.
-            OUT DDRC,R16                    ; E,RW,RS - на выход.
+INITLCD:    LDI R16,(E|RW|RS)               ; Настройка линии управления на выход.
+            OUT DDRC,R16                    ;
 
             LDI R16,0xFF                    ; Настройка линии данных.
             OUT DDRB,R16                    ; D0-D7 - на выход.
@@ -182,25 +193,29 @@ SHFTRGHT:   RCALL WAITBUSY
 
             ;
             ; Формирование импульса готовности данных в случае выполнения инструкции.
-EPULSECMD:  LDI R16,0b00000100              ;
+EPULSECMD:  LDI R16,(EH|W|INSTREG)          ;
             OUT PORTC,R16                   ;
             NOP                             ; Длительность импульса - 500ns.
             NOP                             ; По даташиту - не менее 400ns.
             NOP                             ;
             NOP                             ;
-            LDI R16,0b00000000              ;
+            LDI R16,0                       ;
             OUT PORTC,R16                   ;
             RET                             ;
 
             ;
             ; Формирование импульса готовности данных в случае передачи данных.
-EPULSEDAT:  LDI R16,0b00000101              ;
+            ;
+            ; Note: если в конце сбрасывать в ноль только E, а RS оставлять установленным (DATREG),
+            ; то следующий вызов WAITBUSY отработает на запись данных, вместо чтения,
+            ; проигнорировав установленный в начале вызова WAITBUSY бит RW, и выведет пустой символ, создав пропуск на экране.
+EPULSEDAT:  LDI R16,(EH|W|DATREG)           ;
             OUT PORTC,R16                   ;
             NOP                             ;
             NOP                             ;
             NOP                             ;
             NOP                             ;
-            LDI R16,0b00000001              ;
+            LDI R16,0                       ;
             OUT PORTC,R16                   ;
             RET                             ;
 
@@ -212,17 +227,17 @@ EPULSEDAT:  LDI R16,0b00000101              ;
 WAITBUSY:   LDI R16,0                       ; Переключаем PORTB на вход.
             OUT DDRB,R16                    ;
 
-REPEAT0:    LDI R16,0b00000110              ; Формируем импульс на E.
+REPEAT0:    LDI R16,(EH|R|INSTREG)          ; Формируем импульс на E.
             OUT PORTC,R16                   ;
             NOP                             ; Удерживаем импульс E не менее 400ns.
             NOP                             ;
             NOP                             ;
             NOP                             ;
             
-            IN R17,PINB                     ; Чтение доступно только пока удерживается импульс E.
-
             LDI R16,0b00000010              ;
             OUT PORTC,R16                   ;
+
+            IN R17,PINB                     ;
 
             SBRC R17,BUSYFLAG               ; Busy-флаг сброшен?
             RJMP REPEAT0                    ; Нет, ожидаем.
