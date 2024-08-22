@@ -9,16 +9,16 @@
 ; Взаимодействие происходит в синхронном режиме, с ожиданием сброса busy-флага.
             .EQU BUSYFLAG=7                 ; Номер бита в PORTB, на котором ожидается значение флага busy.
             
+            .EQU RS=0                       ; 0 - регистр инструкций, 1 - регистр данных.
+            .EQU RW=1                       ; 0 - запись, 1 - чтение.
+            .EQU E=2                        ; Импульс на выполнение инструкции.
+
             .EQU EH=0b00000100              ; Enable pulse high.
             .EQU EL=0b00000000              ; Enable pulse low.
             .EQU INSTREG=0b00000000         ; Выбор регистра инструкций в LCD.
             .EQU DATREG=0b00000001          ; Выбор регистра данных в LCD.
             .EQU R=0b00000010               ; Чтение данных из LCD.
             .EQU W=0b00000000               ; Запись данных в LCD.
-
-            .EQU RS=0b00000001              ; Пины линии управления.
-            .EQU RW=0b00000010              ;
-            .EQU E=0b00000100               ;
             
             .EQU CLEARDISP=0x01             ; Код инструкции Clear Display.
             
@@ -55,13 +55,13 @@
 
             .EQU SYSCONF=(FUNCSET|DATLEN8|DISPLINES2|FONT5X8)
             .EQU DISPCONF=(DISPCTRL|DISPON|CURSON|CURSBLNKON)
-            
+
             .DEF CHAR=R0                    ; Здесь ожидается символ, выводимый PRNTCHR.
 
             ;
             ; Инициализация LCD.
-INITLCD:    LDI R16,(E|RW|RS)               ; Настройка линии управления на выход.
-            OUT DDRC,R16                    ;
+INITLCD:    LDI R16,0b00000111              ; Настройка линии управления.
+            OUT DDRC,R16                    ; RS,RW,E - на выход.
 
             LDI R16,0xFF                    ; Настройка линии данных.
             OUT DDRB,R16                    ; D0-D7 - на выход.
@@ -199,8 +199,7 @@ EPULSECMD:  LDI R16,(EH|W|INSTREG)          ;
             NOP                             ; По даташиту - не менее 400ns.
             NOP                             ;
             NOP                             ;
-            LDI R16,0                       ;
-            OUT PORTC,R16                   ;
+            CBI PORTC,E                     ;
             RET                             ;
 
             ;
@@ -215,9 +214,8 @@ EPULSEDAT:  LDI R16,(EH|W|DATREG)           ;
             NOP                             ;
             NOP                             ;
             NOP                             ;
-            LDI R16,0                       ;
-            OUT PORTC,R16                   ;
-            RET                             ;
+            CBI PORTC,E                     ; RS (DATREG) должен оставаться установленным на спаде фронта,
+            RET                             ; т.к. контроллер LCD обрабатывает текущую инструкцию по спаду.
 
             ;
             ; Синхронное ожидание готовности LCD принять новую команду.
@@ -227,17 +225,17 @@ EPULSEDAT:  LDI R16,(EH|W|DATREG)           ;
 WAITBUSY:   LDI R16,0                       ; Переключаем PORTB на вход.
             OUT DDRB,R16                    ;
 
-REPEAT0:    LDI R16,(EH|R|INSTREG)          ; Формируем импульс на E.
-            OUT PORTC,R16                   ;
+REPEAT0:    CBI PORTC,RS                    ; Формируем импульс E на чтение busy-флага.
+            SBI PORTC,RW                    ; Устанавливаем биты последовательно, поскольку на реальном контроллере обнаружился баг -
+            SBI PORTC,E                     ; при одновременной установке битов контроллер игнорирует их и выводит на экран пустой символ.
             NOP                             ; Удерживаем импульс E не менее 400ns.
             NOP                             ;
             NOP                             ;
             NOP                             ;
             
-            LDI R16,0b00000010              ;
-            OUT PORTC,R16                   ;
+            IN R17,PINB                     ; По даташиту чтение busy-флага должно происходить, пока E на высоком уровне.
 
-            IN R17,PINB                     ;
+            CBI PORTC,E                     ;
 
             SBRC R17,BUSYFLAG               ; Busy-флаг сброшен?
             RJMP REPEAT0                    ; Нет, ожидаем.
