@@ -1,11 +1,10 @@
 # Hardware Calculator From Scratch
 
-This repository contains the complete firmware code for a calculator running on an AVR microcontroller, specifically the ATmega328P.
+This repository contains the complete firmware code for a calculator running on an AVR microcontroller ATmega328P.
 
-![Photo 1](docs/photo_1.jpg)
+https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
+
 ![Photo 2](docs/photo_2.jpg)
-
-[![Video 1](https://raw.githubusercontent.com/igor-240340/HardwareCalculatorFromScratch/dev/docs/video_thumbnail.png)](https://raw.githubusercontent.com/igor-240340/HardwareCalculatorFromScratch/dev/docs/video_1.mp4)
 
 ## Overview
 
@@ -62,7 +61,7 @@ Sources of errors include:
 
 ## Theory and Documentation
 
-The primary material on the theoretical foundations of the calculator's development and some proofs related to floating-point calculations can be found in ![this](<docs/HardwareCalculatorFromScratch. Research.odt>) paper (it's a little messy for now).
+The primary material on the theoretical foundations of the calculator's development and some proofs related to floating-point calculations can be found in [this](docs/HardwareCalculatorFromScratch.%20Research.odt) paper (it's a little messy for now).
 
 More details on the floating-point library `float32.asm` are located in the corresponding repository mentioned earlier.
 
