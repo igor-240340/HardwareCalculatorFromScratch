@@ -4,7 +4,7 @@ This repository contains the complete firmware code for a calculator running on 
 
 https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 
-![Photo 2](docs/photo_2.jpg)
+![Photo 1](docs/photo_1.jpg)
 
 ## Overview
 
