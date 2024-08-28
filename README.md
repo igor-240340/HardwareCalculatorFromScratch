@@ -72,3 +72,8 @@ This project also includes a fully functioning simulation in Proteus, which you 
 More research notes and corresponding educational material will be added later when they are in good condition and translated into English.
 
 If you intrested in tinkering with this project by yourself, here is all material that has been created during development of the calculator: [download](https://drive.google.com/file/d/1reeEPcQ95P3t-i-bTYWgDMNL65eEh_6R/view?usp=drive_fs). It's a total mess but may contain something interesting.
+
+## How to assemble
+This project was developed in the deprecated AVR Studio 4 and has not been tested in its successor, Microchip Studio for AVR.
+
+Here you'll find all the archived tools necessary to assemble this project: [download](https://drive.google.com/open?id=1ui3sfd_ny48FvYHLp-04rkHGDCnqHrAI&usp=drive_fs).
