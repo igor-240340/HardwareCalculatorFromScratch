@@ -38,8 +38,8 @@ NUMSTR:     .BYTE 256                       ; 0x0800. УКАЗАТЕЛЬ НА AS
             JMP RESET
             JMP KEYPAD
             
-            .INCLUDE "LCD1602.ASM"
-            .INCLUDE "FLOAT32.ASM"
+            .INCLUDE "lcd1602.asm"
+            .INCLUDE "float32avr.asm"
 
 ;
 ; ОБРАБОТКА ПРЕРЫВАНИЙ ОТ КЛАВИАТУРЫ.
