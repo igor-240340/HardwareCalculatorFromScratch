@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 
 The calculator is built upon two custom libraries:
 
-- **float32.asm** - Software emulation of floating-point arithmetic.
+- **float32avr.asm** - Software emulation of floating-point arithmetic.
 - **lcd1602.asm** - Library for interfacing with the LCD1602 based on the HD44780 controller.
 
 The `float32.asm` repository with documentation can be found [here](https://github.com/igor-240340/Float32AVR).
