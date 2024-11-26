@@ -1,36 +1,36 @@
             .INCLUDE <m328pdef.inc>
 
-                                            ; Эмуляция ввода с клавиатуры для тестирования.
-                                            ; в этом режиме контроллер читает числовые строки и
-;            .EQU EMULKEYPD=1                ; транслирует их в коды энкодера MM74C922, имитируя нажатие кнопок.
+                                            ; Keyboard input emulation for testing.
+                                            ; In this mode, the controller reads numerical strings and
+;            .EQU EMULKEYPD=1                ; translates them into MM74C922 encoder codes, simulating button presses.
 
-                                            ; Под стеком 3 переменных по 4 байта под float32,
-                                            ; 16 байт под ASCII-коды нажатых клавиш и еще
-            .EQU SP=RAMEND-(3*4+16+256)     ; 256 байт под ASCII-строку.
-            .EQU LCDLEN=16                  ; Длина строки в LCD.
-;            .EQU LCDLEN=40                  ; Тестовое увеличение лимита для проверки обработки переполнения в ATOF.
+                                            ; Under the stack: 3 floating-point variables, each 4 bytes.
+                                            ; 16 bytes for ASCII codes of pressed keys,
+            .EQU SP=RAMEND-(3*4+16+256)     ; and 256 bytes for an ASCII string.
+            .EQU LCDLEN=16                  ; Maximum length of the visible string in the LCD.
+;            .EQU LCDLEN=40                  ; Temporary limit increase to check overflow handling in ATOF.
 
-            .DEF S=R0                       ; Количество использованных символов в текущей строке дисплея.
-            .DEF P=R1                       ; Номер вводимого операнда, лежит в [0,1].
-            .DEF KEY=R2                     ; ASCII-код нажатой клавиши.
-            .DEF LCDLIM=R3                  ; Максимальное количество выводимых на LCD символов.
+            .DEF S=R0                       ; Number of characters used in the current LCD line.
+            .DEF P=R1                       ; Operand index, lies in the range [0,1].
+            .DEF KEY=R2                     ; ASCII code of the pressed key.
+            .DEF LCDLIM=R3                  ; Maximum number of characters to show on LCD (can change in different contexts).
 
-            .DEF RETL=R22                   ; Сюда бэкапим адрес возврата после прерывания.
+            .DEF RETL=R22                   ; The return address is backed up here after an interrupt.
             .DEF RETH=R23                   ;
 
             .DSEG
 
 .IFDEF EMULKEYPD
-            .ORG 0x012A                     ; Начало таблицы соответствия между ASCII-кодами и кодами энкодера. Таблица лежит в [0x012A,0x0143].
-REVKEYMAP:  .BYTE 26                        ; Младший байт адреса - ASCII-код клавиши. Наименьший код клавиши - 0x2A('*'), наибольший - 0x43('C').
+            .ORG 0x012A                     ; Start of the table mapping ASCII codes to encoder codes. The table occupies addresses in the range [0x012A,0x0143].
+REVKEYMAP:  .BYTE 26                        ; The lower byte of the address corresponds to the ASCII code of the key. The smallest key code is 0x2A('*'), and the largest is 0x43('C').
 .ENDIF
 
             .ORG SP+1                       ;
-A:          .BYTE 4                         ; 0x07E4. Операнд A.
-B:          .BYTE 4                         ; 0x07E8. Операнд B.
-C:          .BYTE 4                         ; 0x07EC. Результат C.
-KEYMAP:     .BYTE 16                        ; 0x07F0. Таблица символов нажатых клавиш.
-NUMSTR:     .BYTE 256                       ; 0x0800. Указатель на ASCII-строку с числом в SRAM.
+A:          .BYTE 4                         ; 0x07E4. Operand A.
+B:          .BYTE 4                         ; 0x07E8. Operand B.
+C:          .BYTE 4                         ; 0x07EC. Result C.
+KEYMAP:     .BYTE 16                        ; 0x07F0. Table of ASCII characters of pressed keys.
+NUMSTR:     .BYTE 256                       ; 0x0800. Pointer to the numeric ASCII string in SRAM.
 
             .CSEG
             .ORG 0x00
