@@ -1,144 +1,144 @@
 ;
-; Float32AVR - библиотека подпрограмм для работы с числами в формате бинарной плавающей точки одинарной точности.
-; Кроме арифметики содержит вспомогательные подпрограммы для конвертации из ASCII и в ASCII.
+; Float32AVR - a subroutine library for working with numbers in single-precision binary floating-point format.
+; In addition to arithmetic, it includes auxiliary subroutines for conversion from and to ASCII.
 ;
-; Copyright (с) 2024 Igor Voytenko <igor.240340@gmail.com>
+; Copyright (c) 2024 Igor Voytenko <igor.240340@gmail.com>
 ;
-; Частичная совместимость с IEEE 754:
-; - Не реализованы спец. значения: inf, nan.
-; - Не реализованы денормализованные числа.
-; - Реализован только один режим округления: к ближайшему/к четному.
-; - Реализован только положительный ноль.
+; Partial compliance with IEEE 754:
+; - Special values (inf, nan) are not implemented.
+; - Denormalized numbers are not implemented.
+; - Only one rounding mode is implemented: to nearest/even.
+; - Only positive zero is implemented.
 ;
-; Тем не менее, граничные значения экспоненты -127 и 128 (0 и 255 в коде со смещением)
-; остаются зарезервированными для спец. значений и денормализованных чисел
-; чтобы можно было довести до полной совместимости в будущем
-; а также для удобства тестирования и сравнения с эталонной IEEE 754 реализацией прямо сейчас.
+; Nevertheless, the exponent boundary values of -127 and 128 (0 and 255 for biased exponent)
+; remain reserved for special values and denormalized numbers
+; to allow for full compatibility in the future
+; and for ease of testing and comparison with the reference IEEE 754 implementation right now.
 ;
-; Обработка исключительных ситуаций.
-; В случае возникновения исключительной ситуации (деление на ноль, переполнение)
-; происходит прыжок на адрес, который должен быть предварительно загружен в Z-регистр перед вызовом подпрограммы.
+; Exception handling.
+; In case of an exceptional situation (division by zero, overflow),
+; a jump is made to an address that must be preloaded into the Z-register before calling a subroutine.
             ;
-            ; Байты исходной мантиссы делимого,
-            ; расширенные GUARD-байтом для безопасного сдвига влево.
-            .DEF MANTA0=R8              
-            .DEF MANTA1=R9              
-            .DEF MANTA2=R10             
-            .DEF MANTAG=R2              
+            ; Bytes of the dividend's original mantissa,
+            ; extended with a GUARD byte for safe left shifting.
+            .DEF MANTA0=R8
+            .DEF MANTA1=R9
+            .DEF MANTA2=R10
+            .DEF MANTAG=R2
 
             ;
-            ; Байты исходной мантиссы делителя,
-            ; Расширенные GUARD-байтом для формирования доп. кода отрицательной мантиссы.
-            .DEF MANTB0=R12             
-            .DEF MANTB1=R13             
-            .DEF MANTB2=R14             
-            .DEF MANTBG=R3              
+            ; Bytes of the divisor's original mantissa,
+            ; extended with a GUARD byte for forming the two's complement of a negative mantissa.
+            .DEF MANTB0=R12
+            .DEF MANTB1=R13
+            .DEF MANTB2=R14
+            .DEF MANTBG=R3
 
             ;
-            ; Байты доп. кода отрицательной мантиссы делителя.
+            ; Bytes of the two's complement of the divisor's negative mantissa.
             .DEF MANTB0NEG=R4
             .DEF MANTB1NEG=R5
             .DEF MANTB2NEG=R6
             .DEF MANTBGNEG=R7
 
             ;
-            ; Расширенные экспоненты.
-            .DEF EXPA0=R11                  ; Первый операнд.
+            ; Extended exponents.
+            .DEF EXPA0=R11                  ; First operand.
             .DEF EXPA1=R20                  ;
-            .DEF EXPR0=R11                  ; Результат.
+            .DEF EXPR0=R11                  ; Result.
             .DEF EXPR1=R20                  ;
-            .DEF EXPB0=R15                  ; Второй операнд.
+            .DEF EXPB0=R15                  ; Second operand.
             .DEF EXPB1=R21                  ;
 
             ;
-            ; Байты мантиссы частного.
+            ; Bytes of the quotient's mantissa.
             .DEF Q0=R22
             .DEF Q1=R23
             .DEF Q2=R24
             .DEF Q3=R25
 
-            .EQU QDIGITS=24+2               ; Количество цифр частного к вычислению: 24 + R + G + S (S определяется вне цикла).
+            .EQU QDIGITS=24+2               ; Number of digits of the quotient to calculate: 24 + R + G + S (S is determined outside the loop).
 
-            .DEF STEPS=R17                  ; Счетчик цикла.
+            .DEF STEPS=R17                  ; Loop counter.
 
-            .EQU RGSMASK=0b00000111         ; Маска для извлечения RGS-битов при округлении.
-            .DEF RGSBITS=R18                ; Дополнительные биты мантиссы частного + STICKY-бит для корректного округления.
+            .EQU RGSMASK=0b00000111         ; Mask for extracting RGS bits during rounding.
+            .DEF RGSBITS=R18                ; Additional bits of the quotient's mantissa + STICKY bit for correct rounding.
 
-            .DEF RSIGN=R0                   ; Знак результата (частное/произведение/алгебраическая сумма).
+            .DEF RSIGN=R0                   ; Sign of the result (quotient/product/algebraic sum).
 
             ;
-            ; Мантисса произведения.
+            ; Mantissa of the product.
             .DEF MANTP0=R17
             .DEF MANTP1=R18
             .DEF MANTP2=R19
             .DEF MANTP3=R23
             .DEF MANTP4=R24
             .DEF MANTP5=R25
-            .DEF GUARD=R7                  ; GUARD-регистр для временного хранения R-бита мантиссы произведения.
+            .DEF GUARD=R7                  ; GUARD register for temporarily storing the R bit of the product's mantissa.
 
-            .DEF STATUS0=R5                ; Регистр статуса после операции над младшим байтом.
-            .DEF STATUS1=R6                ; Регистр статуса после операции над старшим байтом.
-            .DEF SREGACC=R17               ; Регистр статуса после нескольких операций. например, побитовое И регистра STATUS.
+            .DEF STATUS0=R5                ; STATUS register after operation on the least significant byte.
+            .DEF STATUS1=R6                ; STATUS register after operation on the most significant byte.
+            .DEF SREGACC=R17               ; Status register after multiple operations. For example, bitwise AND of the STATUS register.
 
 ;
-; Делит два числа по схеме с неподвижным делителем без восстановления остатка.
+; Divides two numbers using a non-restoring division algorithm with a fixed divisor.
 ;
-; Вход:
-;   - R11, R10, R9, R8: Делимое.
-;   - R15, R14, R13, R12: Делитель.
+; Input:
+;   - R11, R10, R9, R8: The dividend.
+;   - R15, R14, R13, R12: The divisor.
 ;
-; Выход:
-;   - R11, R10, R9, R8: Частное.
+; Output:
+;   - R11, R10, R9, R8: The quotient.
 FDIV32:     ;
-            ; Фильтрация операндов.
+            ; Operand filtering.
             CLR R16                     ;
             OR R16,R12                  ;
             OR R16,R13                  ;
             OR R16,R14                  ;
             OR R16,R15                  ;
             IN R16,SREG                 ; 
-            SBRC R16,SREG_Z             ; Делитель равен нулю?
-            IJMP                        ; Да, выбрасываем ошибку. Делимое при этом может быть как нулевым так и ненулевым - оба варианта некорректны.
+            SBRC R16,SREG_Z             ; Is the divisor zero?
+            IJMP                        ; Yes, throw an error. The dividend can be either zero or non-zero - both cases are invalid.
 
-            CLR R16                     ; Нет, проверяем делимое.
+            CLR R16                     ; No, check the dividend.
             OR R16,R8                   ;
             OR R16,R9                   ;
             OR R16,R10                  ;
             OR R16,R11                  ;
             IN R16,SREG                 ;
-            SBRC R16,SREG_Z             ; Делимое равно нулю?
-            RJMP SETZERO                ; Да, возвращаем ноль.
-                                        ; Нет, оба операнда ненулевые, вычисляем частное.
+            SBRC R16,SREG_Z             ; Is the dividend zero?
+            RJMP SETZERO                ; Yes, return zero.
+                                        ; No, both operands are non-zero; calculate the quotient.
             
             ;
-            ; Определение знака частного.
-            MOV RSIGN,R11               ; Копируем старший байт делимого.
-            MOV R1,R15                  ; Копируем старший байт делителя.
-            LDI R16,0b10000000          ; Загружаем маску знака.
-            AND RSIGN,R16               ; Извлекаем знак делимого.
-            AND R1,R16                  ; Извлекаем знак делителя.
-            EOR RSIGN,R1                ; Определяем знак частного.
+            ; Determining the sign of the quotient.
+            MOV RSIGN,R11               ; Copy the most significant byte of the dividend.
+            MOV R1,R15                  ; Copy the most significant byte of the divisor.
+            LDI R16,0b10000000          ; Load the sign mask.
+            AND RSIGN,R16               ; Extract the sign of the dividend.
+            AND R1,R16                  ; Extract the sign of the divisor.
+            EOR RSIGN,R1                ; Determine the sign of the quotient.
 
             ;
-            ; Распаковка делимого.
-            ROL R10                     ; MSB мантиссы делимого содержит LSB экспоненты. Сдвигаем его в бит переноса.
-            ROL R11                     ; Избавляемся от знака делимого и восстанавливаем младший бит экспоненты.
-            ROR R10                     ; Возвращаем на место старший байт мантиссы делимого.
-            OR R10,R16                  ; Восстанавливаем скрытую единицу мантиссы.
+            ; Unpacking the dividend.
+            ROL R10                     ; The MSB of the dividend's mantissa contains the LSB of the exponent. Shift it to the carry bit.
+            ROL R11                     ; Remove the sign of the dividend and restore the least significant bit of the exponent.
+            ROR R10                     ; Return the most significant byte of the dividend's mantissa to its place.
+            OR R10,R16                  ; Restore the hidden bit of the mantissa.
 
             ;
-            ; Распаковка делителя.
-            ROL R14                     ; То же самое для делителя.
+            ; Unpacking the divisor.
+            ROL R14                     ; The same applies to the divisor.
             ROL R15                     ; 
             ROR R14                     ; 
             OR R14,R16                  ;
 
             ;
-            ; Вычисление экспоненты частного.
+            ; Calculating the exponent of the quotient.
             CLR EXPA1
             CLR EXPB1
             
-            COM EXPB0                   ; Формируем доп. код экспоненты делителя.
+            COM EXPB0                   ; Generate the two's complement of the divisor's exponent.
             COM EXPB1                   ;
             LDI R16,1                   ; 
             ADD EXPB0,R16               ; 
@@ -147,216 +147,216 @@ FDIV32:     ;
 
             ADD EXPA0,EXPB0             ; EXPA=EXPA-EXPB.
             ADC EXPA1,EXPB1             ;
-            LDI R16,127                 ; Восстанавливаем результат в коде со смещением.
+            LDI R16,127                 ; Make the exponent of the quotient biased.
             ADD EXPA0,R16               ; 
             LDI R16,0                   ;
             ADC EXPA1,R16               ;
             
             ;
-            ; Формирование доп. кода мантиссы делителя.
+            ; Generating the two's complement of the divisor's mantissa.
             CLR MANTAG                  ;
             CLR MANTBG                  ;
 
-            MOV MANTB0NEG,MANTB0        ; Копируем положительную мантиссу делителя.
+            MOV MANTB0NEG,MANTB0        ; Copy the positive mantissa of the divisor.
             MOV MANTB1NEG,MANTB1        ;
             MOV MANTB2NEG,MANTB2        ;
             MOV MANTBGNEG,MANTBG        ;
 
-            COM MANTB0NEG               ; Поскольку 2^N-|B|=(2^N-1-|B|)+1=COM(|B|)+1,
-            COM MANTB1NEG               ; то инвертируем биты положительной мантиссы
+            COM MANTB0NEG               ; Since 2^N-|B|=(2^N-1-|B|)+1=COM(|B|)+1,
+            COM MANTB1NEG               ; invert the bits of the positive mantissa
             COM MANTB2NEG               ;
             COM MANTBGNEG               ;
 
-            LDI R16,1                   ; и прибавляем единицу,
-            ADD MANTB0NEG,R16           ; не забывая про возможное появление бита переноса.
+            LDI R16,1                   ; and add one,
+            ADD MANTB0NEG,R16           ; not forgetting the potential carry bit.
             LDI R16,0                   ;
             ADC MANTB1NEG,R16           ; 
             ADC MANTB2NEG,R16           ; 
             ADC MANTBGNEG,R16           ;
 
             ;
-            ; Вычисление мантиссы частного.
-            LDI STEPS,QDIGITS           ; Количество шагов равно количеству вычисляемых цифр частного.
-            CLR Q0                      ; Зануляем мантиссу частного.
+            ; Calculating the mantissa of the quotient.
+            LDI STEPS,QDIGITS           ; The number of steps equals the number of computed digits of the quotient.
+            CLR Q0                      ; Zero the mantissa of the quotient.
             CLR Q1                      ;
             CLR Q2                      ;
             CLR Q3                      ;
 
-SUBMANTB:   ADD MANTA0,MANTB0NEG        ; Вычитаем из мантиссы делимого или остатка
-            ADC MANTA1,MANTB1NEG        ; мантиссу делителя,
-            ADC MANTA2,MANTB2NEG        ; умноженную на вес
-            ADC MANTAG,MANTBGNEG        ; очередной цифры частного.
+SUBMANTB:   ADD MANTA0,MANTB0NEG        ; Subtract from the mantissa of the dividend or remainder
+            ADC MANTA1,MANTB1NEG        ; the mantissa of the divisor,
+            ADC MANTA2,MANTB2NEG        ; multiplied by the weight
+            ADC MANTAG,MANTBGNEG        ; of the corresponding digit of the quotient.
 
 CALCDIGIT:  IN R16,SREG                 ;
-            SBRS R16,SREG_N             ; Остаток отрицательный?
-            SBR Q0,1                    ; Нет, устанавливаем текущую цифру частного в 1.
+            SBRS R16,SREG_N             ; Is the remainder negative?
+            SBR Q0,1                    ; No, set the current digit of the quotient to 1.
 
-            DEC STEPS                   ; Вычислены все цифры частного?
-            BREQ RESTPOSREM             ; Да, восстанавливаем последний положительный остаток.
+            DEC STEPS                   ; Are all digits of the quotient calculated?
+            BREQ RESTPOSREM             ; Yes, restore the last positive remainder.
 
-            CLC                         ; Освобождаем и зануляем LSB для следующей цифры частного.
+            CLC                         ; Clear and zero the LSB for the next digit of the quotient.
             ROL Q0                      ;
             ROL Q1                      ; 
             ROL Q2                      ;
             ROL Q3                      ;
 
-            CLC                         ; Сдвигаем остаток влево вместе с виртуальной
-            ROL MANTA0                  ; разрядной сеткой, которая привязана к нему.
-            ROL MANTA1                  ; Неподвижная мантисса делителя в этой сетке
-            ROL MANTA2                  ; станет эквивалентна умноженной на вес следующей
-            ROL MANTAG                  ; младшей цифры частного, которую мы будем выяснять.
+            CLC                         ; Shift the remainder left along with the virtual
+            ROL MANTA0                  ; digit grid attached to it.
+            ROL MANTA1                  ; The fixed mantissa of the divisor in this grid
+            ROL MANTA2                  ; will become equivalent to being multiplied by the weight of the next
+            ROL MANTAG                  ; lower digit of the quotient, which we are going to determine.
 
             IN R16,SREG                 ;
-            SBRS R16,SREG_N             ; Остаток положительный?
-            RJMP SUBMANTB               ; Да, отнимаем мантиссу делителя.
-            ADD MANTA0,MANTB0           ; Нет, прибавляем мантиссу делителя.
+            SBRS R16,SREG_N             ; Is the remainder positive?
+            RJMP SUBMANTB               ; Yes, subtract the mantissa of the divisor.
+            ADD MANTA0,MANTB0           ; No, add the mantissa of the divisor.
             ADC MANTA1,MANTB1           ;
             ADC MANTA2,MANTB2           ;
             ADC MANTAG,MANTBG           ;
-            RJMP CALCDIGIT              ; Определяем следующую цифру частного.
+            RJMP CALCDIGIT              ; Determine the next digit of the quotient.
 
 RESTPOSREM: IN R16,SREG                 ;
-            SBRS R16,SREG_N             ; Последний остаток уже положительный?
-            RJMP CALCSTICKY             ; Да, переходим к вычислению STICKY-бита.
-            ADD MANTA0,MANTB0           ; Нет, восстанавливаем до последнего положительного.
+            SBRS R16,SREG_N             ; Is the last remainder already positive?
+            RJMP CALCSTICKY             ; Yes, proceed to calculate the STICKY bit.
+            ADD MANTA0,MANTB0           ; No, restore to the last positive remainder.
             ADC MANTA1,MANTB1           ;
             ADC MANTA2,MANTB2           ;
             ADC MANTAG,MANTBG           ;
 
             ;
-            ; Вычисление STICKY-бита для корректного округления к ближайшему.
+            ; Calculation of the STICKY bit for correct rounding to the nearest.
             ;
-            ; Если остаток ненулевой, значит справа от частного существуют ненулевые биты.
+            ; If the remainder is non-zero, it means there are non-zero bits to the right of the quotient.
             ; S=1, R>0
             ; S=0, R=0
-CALCSTICKY: COM MANTA0                  ; Вычисление доп. кода остатка.
-            COM MANTA1                  ; Инвертируем остаток: 2^N-1-A < 2^N (для всех значений A).
-            COM MANTA2                  ; Прибавляем единицу: 2^N-1-A+1=2^N-A < 2^N (только для ненулевых A).
-            COM MANTAG                  ; Следовательно, только при нулевом остатке
-            LDI R16,1                   ; из старшего байта будет единица переноса.
-            ADD MANTA0,R16              ; А это значит, что S=NOT(C), где C - бит переноса.
+CALCSTICKY: COM MANTA0                  ; Calculation of the remainder's two's complement.
+            COM MANTA1                  ; Invert the remainder: 2^N-1-A < 2^N (for all values of A).
+            COM MANTA2                  ; Add one: 2^N-1-A+1=2^N-A < 2^N (only for non-zero A).
+            COM MANTAG                  ; Consequently, only with a zero remainder
+            LDI R16,1                   ; will there be a carry from the most significant byte.
+            ADD MANTA0,R16              ; This means that S=NOT(C), where C is the carry bit.
             LDI R16,0                   ;
             ADC MANTA1,R16              ;
             ADC MANTA2,R16              ;
             ADC MANTAG,R16              ;
 
-            IN R16,SREG                 ; Конвертируем бит переноса в S-бит.
+            IN R16,SREG                 ; Convert the carry bit to the S-bit.
             LDI R17,1                   ; 
             EOR R16,R17                 ;
             OUT SREG,R16                ;
 
-            ROL Q0                      ; Добавляем справа к мантиссе частного значение S-бита.
+            ROL Q0                      ; Add the value of the S-bit to the right of the quotient's mantissa.
             ROL Q1                      ; 
             ROL Q2                      ;
             ROL Q3                      ;
 
             ;
-            ; Нормализация мантиссы частного.
+            ; Normalization of the quotient's mantissa.
             ;
-            ; Мантисса частного лежит в интервале (0.5, 2)
-            ; поэтому денормализация возможна только на 1 разряд вправо.
-            SBRC Q3,2                   ; Целочисленная единица в частном есть?
-            RJMP CHECKEXP               ; Да, частное нормализовано, проверяем экспоненту.
-            CLC                         ; Нет, нормализуем влево на 1 разряд.
+            ; The quotient's mantissa lies within the range (0.5, 2),
+            ; therefore, denormalization is only possible by 1 bit to the right.
+            SBRC Q3,2                   ; Is there an integer one in the quotient?
+            RJMP CHECKEXP               ; Yes, the quotient is normalized; we check the exponent.
+            CLC                         ; No, normalize to the left by 1 bit.
             ROL Q0                      ;
             ROL Q1                      ;
             ROL Q2                      ;
             ROL Q3                      ;
                                         
-            LDI R16,0xFF                ; Уменьшаем экспоненту частного на 1.
+            LDI R16,0xFF                ; Decrease the quotient's exponent by 1.
             LDI R17,0XFF                ;
             ADD EXPR0,R16               ;
             ADC EXPR1,R17               ;
 
             ;
-            ; Проверка экспоненты на переполнение/антипереполнение.
+            ; Checking the exponent for overflow/underflow.
             ;
-            ; Переполнение: EXP > 127+127=254. По стандарту - установка inf. Текущая реализация - выброс исключения.
-            ; Антипереполнение: EXP < -126+127=1. По стандарту - переход к денормализованному числу. Текущая реализация - установка частного в ноль.
-CHECKEXP:   MOV R18,EXPR0               ; Копируем расширенную экспоненту частного.
+            ; Overflow: EXP > 127+127=254. According to the standard - set to inf. Current implementation - raise an exception.
+            ; Underflow: EXP < -126+127=1. According to the standard - transition to a denormalized number. Current implementation - set the quotient to zero.
+CHECKEXP:   MOV R18,EXPR0               ; Copy the extended exponent of the quotient.
             MOV R19,EXPR1               ;
 
-            LDI R16,255                 ; Формируем -1 в доп. коде.
+            LDI R16,255                 ; Form -1 in two's complement.
             LDI R17,255                 ; 
-            ADD R16,R18                 ; Если истинная экспонента меньше минимального представимого значения (-126),
-            ADC R17,R19                 ; то в коде со смещением после вычитания единицы будет получено отрицательное число.
+            ADD R16,R18                 ; If the true exponent is less than the minimum representable value (-126),
+            ADC R17,R19                 ; then in the biased code, subtracting one will yield a negative number.
             IN R16,SREG                 ; 
-            SBRC R16,SREG_N             ; Несмещенная экспонента меньше -126?
-            RJMP SETZERO                ; Да, антипереполнение, возвращаем ноль.
+            SBRC R16,SREG_N             ; Is the unbiased exponent less than -126?
+            RJMP SETZERO                ; Yes, underflow, return zero.
                                         ; 
-            LDI R16,1                   ; Нет, проверяем экспоненту на переполнение.
-            LDI R17,0                   ; Если истинная экспонента больше максимального представимого значения (127),
-            ADD R16,R18                 ; то в коде со смещением после прибавления единицы старший байт расширенной экспоненты
-            ADC R17,R19                 ; будет отличен от нуля.
-            COM R17                     ; Если старший байт содержит ноль,
-            LDI R16,1                   ; то вычисление доп. кода даст ноль.
-            ADD R16,R17                 ; Несмещенная экспонента меньше 128?
-            BREQ ROUND                  ; Да, переполнения нет, переходим к округлению.
-            IJMP                        ; Нет, переполнение, прыжок на обработчик ошибок, указанный в Z.
+            LDI R16,1                   ; No, check the exponent for overflow.
+            LDI R17,0                   ; If the unbiased exponent exceeds the maximum representable value (127),
+            ADD R16,R18                 ; then, after adding one to the biased exponent, there will be a carry
+            ADC R17,R19                 ; to the high-order byte.
+            COM R17                     ; If the high-order byte contains zero,
+            LDI R16,1                   ; then calculating the two's complement will result in zero.
+            ADD R16,R17                 ; Is the unbiased exponent less than 128?
+            BREQ ROUND                  ; Yes, there is no overflow, proceed to rounding.
+            IJMP                        ; No, overflow detected, jump to the error handler specified in Z.
 
             ;
-            ; Округление к ближайшему.
+            ; Rounding to the nearest.
             ;
-            ; NOTE: Округление происходит уже после нормализации (если была денормализация).
+            ; NOTE: Rounding occurs only after normalization (if denormalization took place).
             ;
-            ; Возможные сочетания битов RS. Для краткости GUARD-бит здесь не учитывается, иллюстрируется сама идея округления.
+            ; Possible combinations of RS bits. For brevity, the GUARD bit is not considered here; the rounding concept is illustrated.
             ; RS
             ; --
-            ; 00: Точное значение. |ERR| = 0.
-            ; 01: Отбрасываем. |ERR| < 2^-24=2^-23/2=ULP/2. Ошибка меньше половины веса последнего разряда мантиссы одинарной точности.
-            ; 10: Если такая ситуация имеет место, значит делимое имеет ненулевые разряды за пределами исходной сетки одинарной точности, что невозможно в нашем случае (обоснование - в доке).
-            ; 11: Отбрасываем и прибавляем 2^-23. |ERR| < 2^-24=ULP/2.
+            ; 00: Exact value. |ERR| = 0.
+            ; 01: Discard. |ERR| < 2^-24=2^-23/2=ULP/2. The error is less than half the weight of the least significant bit of the single-precision mantissa.
+            ; 10: If such a situation occurs, it means the dividend has non-zero bits beyond the original single-precision grid, which is impossible in our case (justification is in the doc).
+            ; 11: Discard and add 2^-23. |ERR| < 2^-24=ULP/2.
             ;
-            ; Комментарии к последнему случаю:
-            ; Q - истинная мантисса частного (бесконечная точность).
-            ; Q' - округленное значение.
-            ; Q' = Q-(2^-24+A)+2^-23, где A - биты за пределами сетки вправо от R, индикатором которых является S-бит, следовательно, A < 2^-24.
-            ; 2^-23 = 2^-24+2^-24 = 2^-24+(A+B), где (A+B) = 2^-24, но A > 0, следовательно B < 2^-24.
-            ; тогда можем записать Q' = Q-2^-24-A+2^-24+A+B = Q+B, где B < 2^-24.
-            ; Поэтому в последнем случае |ERR| < 2^-24=ULP/2.
-ROUND:      MOV RGSBITS,Q0              ; Извлекаем RGS-биты из младшего байта мантиссы частного.
+            ; Comments on the last case:
+            ; Q - true mantissa of the quotient (infinite precision).
+            ; Q' - rounded value.
+            ; Q' = Q-(2^-24+A)+2^-23, where A represents the bits beyond the grid to the right of R, indicated by the S bit, thus A < 2^-24.
+            ; 2^-23 = 2^-24+2^-24 = 2^-24+(A+B), where (A+B) = 2^-24, but A > 0, hence B < 2^-24.
+            ; Then we can write Q' = Q-2^-24-A+2^-24+A+B = Q+B, where B < 2^-24.
+            ; Therefore, in the last case |ERR| < 2^-24=ULP/2.
+ROUND:      MOV RGSBITS,Q0              ; Extract RGS bits from the least significant byte of the quotient's mantissa.
             LDI R16,RGSMASK             ;
             AND RGSBITS,R16             ;
 
             LDI STEPS,3                 ; Отбрасываем RGS-биты в мантиссе частного.
-RSHIFT3:    CLC                         ; Мы вычисляли 26 цифр частного + S-бит,
-            ROR Q3                      ; поэтому после сдвига все цифры мантиссы частного
-            ROR Q2                      ; поместятся в трех младших байтах.
+RSHIFT3:    CLC                         ; We calculated 26 digits of the quotient + S bit,
+            ROR Q3                      ; so after the shift, all digits of the quotient's mantissa
+            ROR Q2                      ; will fit into the three least significant bytes.
             ROR Q1                      ;
             ROR Q0                      ;
             DEC STEPS                   ;
             BRNE RSHIFT3                ;
 
-            LDI R16,0xFC                ; Если в RGS установлен бит R и есть ненулевые биты справа от него,
-            ADD RGSBITS,R16             ; тогда в RGS находится число больше 4, а значит, отбрасывая RGS
-            IN R16,SREG                 ; мы получаем ошибку больше ULP/2.
-            SBRC R16, SREG_N            ; Отбросили больше ULP/2?
-            RJMP PACK                   ; Нет, пакуем частное.
+            LDI R16,0xFC                ; If the R bit is set in RGS and there are non-zero bits to the right of it,
+            ADD RGSBITS,R16             ; then the value in RGS is greater than 4, which means that by discarding RGS,
+            IN R16,SREG                 ; we introduce an error greater than ULP/2.
+            SBRC R16, SREG_N            ; Discarded more than ULP/2?
+            RJMP PACK                   ; No, pack the quotient.
 
-            LDI R16,1                   ; Да, прибавляем 2^-23.
-            ADD Q0,R16                  ; Переполнения при этом не будет, потому что
-            LDI R16,0                   ; нормализованная мантисса, которая даст переполнение - больше максимальной возможной нормализованной мантиссы,
-            ADC Q1,R16                  ; а денормализованная мантисса, которая даст после нормализации переполнение,
-            ADC Q2,R16                  ; может быть получена только если делимое имеет ненулевые разряды за пределами одинарной точности, что невозможно в нашем случае.
+            LDI R16,1                   ; Yes, add 2^-23.
+            ADD Q0,R16                  ; There will be no overflow because
+            LDI R16,0                   ; a normalized mantissa that causes overflow is greater than the maximum possible normalized mantissa;
+            ADC Q1,R16                  ; a denormalized mantissa that would cause overflow after normalization
+            ADC Q2,R16                  ; can only be obtained if the dividend has non-zero bits beyond single precision, which is impossible in our case.
 
             ;
-            ; Упаковка знака, мантиссы и экспоненты частного и запись на место делимого.
-            ; NOTE: Нормализованная и округленная мантисса частного сейчас занимает 3 младших байтах.
-PACK:       ROL Q0                      ; Сдвигаем мантиссу влево, убирая целочисленную единицу.
+            ; Packing the sign, mantissa, and exponent of the quotient and writing it to the dividend's location.
+            ; NOTE: The normalized and rounded mantissa of the quotient now occupies the 3 least significant bytes.
+PACK:       ROL Q0                      ; Shift the mantissa left, removing the integer one.
             ROL Q1                      ;
             ROL Q2                      ;
 
-            CLC                         ; Выдвигаем вправо LSB экспоненты в разряд переноса,
-            ROR EXPR0                   ; одновременно освобождая MSB под знак.
+            CLC                         ; Shift the LSB of the exponent to the carry bit to the right,
+            ROR EXPR0                   ; while freeing the MSB for the sign.
 
-            ROR Q2                      ; Возвращаем мантиссу на место
-            ROR Q1                      ; с LSB экспоненты вместо целочисленной единицы.
+            ROR Q2                      ; Restore the mantissa
+            ROR Q1                      ; with the LSB of the exponent in place of the integer one.
             ROR Q0                      ;
 
-            OR EXPR0,RSIGN              ; Устанавливаем разряд знака.
+            OR EXPR0,RSIGN              ; Set the sign bit.
 
             ;
-            ; Запись мантиссы частного на место делимого.
+            ; Write the quotient's mantissa to the dividend's location.
             MOV MANTA0,Q0
             MOV MANTA1,Q1
             MOV MANTA2,Q2
@@ -364,127 +364,127 @@ PACK:       ROL Q0                      ; Сдвигаем мантиссу вл
             RJMP EXIT
 
 ;
-; Умножает два числа по схеме с неподвижным множителем.
-; NOTE: Мы рассматриваем умножение множителя на множимое, т.е. B*A.
+; Multiplies two numbers using a fixed multiplier scheme.
+; NOTE: We are considering the multiplication of the multiplier by the multiplicand, i.e., B*A.
 ;
-; Вход:
-;   - R11, R10, R9, R8: Множимое.
-;   - R15, R14, R13, R12: Множитель.
+; Input:
+;   - R11, R10, R9, R8: The multiplicand.
+;   - R15, R14, R13, R12: The multiplier.
 ;
-; Выход:
-;   - R11, R10, R9, R8: Произведение.
+; Output:
+;   - R11, R10, R9, R8: The product.
 FMUL32:     ;
-            ; Фильтрация операндов.
+            ; Operand filtering.
             CLR R16                     ;
             OR R16,R8                   ;
             OR R16,R9                   ;
             OR R16,R10                  ;
             OR R16,R11                  ;
-            IN R16,SREG                 ; 
-            SBRC R16,SREG_Z             ; Множимое равно нулю?
-            RJMP SETZERO                ; Да, возвращаем ноль.
+            IN R16,SREG                 ;
+            SBRC R16,SREG_Z             ; Is the multiplicand zero?
+            RJMP SETZERO                ; Yes, return zero.
 
-            CLR R16                     ; Нет, проверяем множитель.
+            CLR R16                     ; No, check the multiplier.
             OR R16,R12                  ;
             OR R16,R13                  ;
             OR R16,R14                  ;
             OR R16,R15                  ;
             IN R16,SREG                 ; 
-            SBRC R16,SREG_Z             ; Множитель равен нулю?
-            RJMP SETZERO                ; Да, возвращаем ноль.
+            SBRC R16,SREG_Z             ; Is the multiplier zero?
+            RJMP SETZERO                ; Yes, return zero.
 
             ;
-            ; Определение знака произведения.
-            MOV RSIGN,R11               ; Копируем старший байт множимого.
-            MOV R1,R15                  ; Копируем старший байт множителя.
-            LDI R16,0b10000000          ; Загружаем маску знака.
-            AND RSIGN,R16               ; Извлекаем знак множимого.
-            AND R1,R16                  ; Извлекаем знак множителя.
-            EOR RSIGN,R1                ; Определяем знак произведения.
+            ; Determining the sign of the product.
+            MOV RSIGN,R11               ; Copy the most significant byte of the multiplicand.
+            MOV R1,R15                  ; Copy the most significant byte of the multiplier.
+            LDI R16,0b10000000          ; Load the sign mask.
+            AND RSIGN,R16               ; Extract the sign of the multiplicand.
+            AND R1,R16                  ; Extract the sign of the multiplier.
+            EOR RSIGN,R1                ; Determine the sign of the product.
 
             ;
-            ; Распаковка множимого.
-            ROL R10                     ; MSB мантиссы содержит LSB экспоненты. Сдвигаем его в бит переноса.
-            ROL R11                     ; Избавляемся от знака и восстанавливаем младший бит экспоненты.
-            SEC                         ; Восстанавливаем скрытую единицу мантиссы.
-            ROR R10                     ; Возвращаем на место старший байт мантиссы.
+            ; Unpack the multiplicand.
+            ROL R10                     ; The MSB of the mantissa contains the LSB of the exponent. Shift it into the carry bit.
+            ROL R11                     ; Remove the sign and restore the least significant bit of the exponent.
+            SEC                         ; Restore the hidden bit of the mantissa.
+            ROR R10                     ; Return the most significant byte of the mantissa to its place.
 
             ;
-            ; Распаковка множителя.
-            ROL R14                     ; То же самое что и для множимого.
+            ; Unpack the multiplier.
+            ROL R14                     ; Same as for the multiplicand.
             ROL R15                     ; 
             SEC                         ;
             ROR R14                     ; 
 
             ;
-            ; Вычисление экспоненты произведения.
+            ; Calculate the exponent of the product.
             ;
-            ; Поскольку экспоненты представлены в коде со смещением, то
-            ; их значения всегда являются положительными числами в диапазоне [1,254].
+            ; Since the exponents are biased,
+            ; their values are always positive numbers in the range [1,254].
             CLR EXPA1
             CLR EXPB1
             
             ADD EXPA0,EXPB0             ; EXPA=EXPA+EXPB.
-            ADC EXPA1,EXPB1             ; Сумма экспонент содержит избыточное значение 127.
-            LDI R16,-127                ; Необходимо отнять это значение.
-            LDI R17,255                 ; Формируем доп. код для -127 в двойной сетке.
-            ADD EXPA0,R16               ; Восстанавливаем сумму экспонент
-            ADC EXPA1,R17               ; в коде со смещением.
+            ADC EXPA1,EXPB1             ; The sum of the exponents contains an excess value of 127.
+            LDI R16,-127                ; It is necessary to subtract this value.
+            LDI R17,255                 ; Form the two's complement for -127 in the double binary grid.
+            ADD EXPA0,R16               ; Make the sum of the exponents biased.
+            ADC EXPA1,R17               ;
 
             ;
-            ; Вычисление мантиссы произведения.
-            LDI R22,24                  ; Количество шагов цикла равно количеству цифр множимого.
+            ; Calculate the mantissa of the product.
+            LDI R22,24                  ; The number of loop steps is equal to the number of digits in the multiplicand.
 
-            CLR MANTP0                  ; Зануляем произведение.
+            CLR MANTP0                  ; Zero out the product.
             CLR MANTP1                  ;
             CLR MANTP2                  ;
             CLR MANTP3                  ;
             CLR MANTP4                  ;
             CLR MANTP5                  ;
 
-NEXTDIGIT:  ROR MANTA2                  ; Извлекаем очередную цифру множимого.
+NEXTDIGIT:  ROR MANTA2                  ; Extract the next digit of the multiplicand.
             ROR MANTA1                  ;
             ROR MANTA0                  ;
                                         
-            IN R16,SREG                 ; 
-            SBRS R16,SREG_C             ; Цифра равна 1?
-            RJMP LOOPCOND0              ; Нет, равна 0, множитель не прибавляем.
-            ADD MANTP3,MANTB0           ; Да, прибавляем множитель к аккумулятору.
-            ADC MANTP4,MANTB1           ; Младшие 3 байта множителя в двойной сетке нулевые,
-            ADC MANTP5,MANTB2           ; поэтому достаточно сложить только старшие байты.
+            IN R16,SREG                 ;
+            SBRS R16,SREG_C             ; Is the digit equal to 1?
+            RJMP LOOPCOND0              ; No, it's 0, do not add the multiplier.
+            ADD MANTP3,MANTB0           ; Yes, add the multiplier to the accumulator.
+            ADC MANTP4,MANTB1           ; The lower 3 bytes of the multiplier in the double binary grid are zero,
+            ADC MANTP5,MANTB2           ; so it's enough to add only the higher bytes.
 
-LOOPCOND0:  DEC R22                     ; Это была последняя цифра множимого?
-            BREQ CHECKOVF0              ; Да, мантисса произведения вычислена, проверяем её на переполнение.
+LOOPCOND0:  DEC R22                     ; Was that the last digit of the multiplicand?
+            BREQ CHECKOVF0              ; Yes, the mantissa of the product has been calculated, checking it for overflow.
 
-            ROR MANTP5                  ; Нет, делим аккумулятор на 2.
+            ROR MANTP5                  ; No, divide the accumulator by 2.
             ROR MANTP4                  ;
             ROR MANTP3                  ;
             ROR MANTP2                  ;
             ROR MANTP1                  ;
             ROR MANTP0                  ;            
 
-            RJMP NEXTDIGIT              ; Переходим к следующей цифре множимого.
+            RJMP NEXTDIGIT              ; Move on to the next digit of the multiplicand.
 
 CHECKOVF0:  IN R16,SREG                 ; 
-            SBRS R16,SREG_C             ; Мантисса произведения дала переполнение?
-            RJMP ROUNDPROD              ; Нет, переходим к её округлению.
-            ROR MANTP5                  ; Да, нормализуем мантиссу произведения вправо на 1 разряд.
+            SBRS R16,SREG_C             ; Did the mantissa of the product overflow?
+            RJMP ROUNDPROD              ; No, proceed to rounding it.
+            ROR MANTP5                  ; Yes, normalize the mantissa of the product to the right by 1 bit.
             ROR MANTP4                  ;
             ROR MANTP3                  ;
             ROR MANTP2                  ;
             ROR MANTP1                  ;
             ROR MANTP0                  ;
 
-            LDI R16,1                   ; Корректируем экспоненту.
+            LDI R16,1                   ; Adjust the exponent.
             ADD EXPA0,R16               ;
             LDI R16,0                   ;
             ADC EXPA1,R16               ;
 
             ;
-            ; Округление мантиссы произведения.
+            ; Rounding the product's mantissa.
             ;
-            ; После установки S-бита и извлечения пары RS
-            ; MANTP2 может содержать следующие значения:
+            ; After setting the S-bit and extracting the RS pair,
+            ; MANTP2 can hold the following values:
             ; - 0b11000000
             ; - 0b10000000
             ; - 0b01000000
@@ -492,138 +492,138 @@ CHECKOVF0:  IN R16,SREG                 ;
 ROUNDPROD:  CLR GUARD
             CLC
             
-            ROL MANTP0                  ; Сдвигаем R-БИТ в GUARD-регистр.
-            ROL MANTP1                  ; Теперь младшая часть содержит только биты после R.
+            ROL MANTP0                  ; Shift the R-bit into the GUARD register.
+            ROL MANTP1                  ; Now the lower part contains only the bits after R.
             ROL MANTP2                  ;
             ROL GUARD                   ;
 
-            COM MANTP0                  ; Если после R-БИТА все биты нулевые,
-            COM MANTP1                  ; то вычисление доп. кода младшей части
-            COM MANTP2                  ; даст бит переноса.
-            LDI R16,1                   ; Поэтому отсутствие бита переноса
-            ADD MANTP0,R16              ; используем как признак того,
-            LDI R16,0                   ; что после R-бита есть хотя бы один ненулевой бит.
-            ADC MANTP1,R16              ;
-            ADC MANTP2,R16              ;
+            COM MANTP0                  ; If all the bits after the R-bit are zero,
+            COM MANTP1                  ; then calculating the two's complement of the lower part
+            COM MANTP2                  ; will produce a carry bit.
+            LDI R16,1                   ; Therefore, the absence of a carry bit
+            ADD MANTP0,R16              ; is used as an indicator
+            LDI R16,0                   ; that there is at least one non-zero bit after the R-bit.
+            ADC MANTP1,R16              ; NOTE: Of course, we could detect all zeroes
+            ADC MANTP2,R16              ; in a much simpler way using OR.
 
             IN R16,SREG                 ;
-            SBRS R16,SREG_C             ; После r-бита есть ненулевые биты?
-            SBR MANTP2,0b10000000       ; Да, устанавливаем S-бит.
+            SBRS R16,SREG_C             ; Are there non-zero bits after the R-bit?
+            SBR MANTP2,0b10000000       ; Yes, set the S-bit.
 
-            ROR GUARD                   ; Нет, вся младшая часть нулевая (включая S-бит, поэтому явно обнулять S-бит нет необходимости).
-            ROR MANTP2                  ; Восстанавливаем R-бит.
+            ROR GUARD                   ; No, the entire lower part is zero (including the S-bit, so there is no need to explicitly clear the S-bit).
+            ROR MANTP2                  ; Restoring the R-bit.
             ROR MANTP1                  ;
             ROR MANTP0                  ;
 
-            LDI R16,0b11000000          ; Извлекаем RS-биты.
+            LDI R16,0b11000000          ; Extracting the RS bits.
             AND MANTP2,R16              ;
 
-            CLR GUARD                   ; Интерпретируем регистр с RS-битами как число и формируем его доп. код.
-            COM MANTP2                  ; Доп. код формируем в двойной сетке, т.к. для представления в доп. коде
-            COM GUARD                   ; значений 0b11000000 И 0b10000000 со знаком минус
-            LDI R16,1                   ; одинарной сетки уже не достаточно.
-            ADD MANTP2,R16              ;
-            LDI R16,0                   ;
-            ADC GUARD,R16               ;
+            CLR GUARD                   ; Interpret the register with RS bits as a number and form its two's complement.
+            COM MANTP2                  ; The two's complement is formed in double range, as the single range is insufficient
+            COM GUARD                   ; to represent the values 0b11000000 and 0b10000000 as negative in two's complement.
+            LDI R16,1                   ; NOTE: In fact the single range is insufficent only to distinguish negative values
+            ADD MANTP2,R16              ; from positive ones. But when performing subtraction we can use carry bit as an
+            LDI R16,0                   ; indication of the sign of the result, so we don't actually need to form two's
+            ADC GUARD,R16               ; complement in the double range.
 
-            CLR STATUS0                 ; Разность между опорным значеним 0b10000000 и числовой интерпретацией RS
-            CLR STATUS1                 ; однозначно связана с направлением округления (см. доку).
-            LDI R16,0b10000000          ; За признак берем нулевой результат и знак полученной разности.
+            CLR STATUS0                 ; The difference between the reference value 0b10000000 and the numerical interpretation of RS
+            CLR STATUS1                 ; is directly related to the rounding direction (see the documentation).
+            LDI R16,0b10000000          ; We take the zero result and the sign of the obtained difference as the indicator for the rounding direction.
             ADD MANTP2,R16              ; 
-            IN STATUS0,SREG             ; Сохраняем флаги после операции с младшим байтом.
+            IN STATUS0,SREG             ; Save flags after the operation with the least significant byte.
             LDI R16,0                   ; 
             ADC GUARD,R16               ;
-            IN STATUS1,SREG             ; Сохраняем флаги после операции со старшим байтом.
+            IN STATUS1,SREG             ; Save flags after the operation with the most significant byte.
 
-            SBRS STATUS1,SREG_N         ; RS=0b11000000? [NOTE: Отрицательная разность возможна только в ситуации 0b10000000-0b11000000.]
-            RJMP HALFWAY                ; Нет, проверяем следующий вариант.
-            LDI R16,1                   ; Да, младшая часть больше ulp/2. Округляем в большую сторону.
-            ADD MANTP3,R16              ; Отбрасываем младшую часть и прибавляет ULP.
-            LDI R16,0                   ; Это эквивалентно прибавлению к младшей части величины меньше ULP/2,
-            ADC MANTP4,R16              ; приводящему к занулению младшей части и появлению бита переноса в MANTP3.
+            SBRS STATUS1,SREG_N         ; RS=0b11000000? [NOTE: A negative difference is only possible in the situation 0b10000000-0b11000000.]
+            RJMP HALFWAY                ; No, checking the next case.
+            LDI R16,1                   ; Yes, the lower part is greater than ULP/2. Rounding up.
+            ADD MANTP3,R16              ; Discarding the lower part and adding ULP.
+            LDI R16,0                   ; This is equivalent to adding a value smaller than ULP/2 to the lower part,
+            ADC MANTP4,R16              ; leading to zeroing out the lower part and generating a carry bit in MANTP3.
             ADC MANTP5,R16              ;
             RJMP CHECKOVF1              ;
 
-HALFWAY:    AND STATUS1,STATUS0         ; Разность нулевая, если флаг Z был установлен для каждого байта.
+HALFWAY:    AND STATUS1,STATUS0         ; The difference is zero if the Z-flag was set for each byte.
             SBRS STATUS1,SREG_Z         ; RS=0b10000000?
-            RJMP CHECKEXP1              ; Нет, RS=0b01000000 или RS=0b00000000. Младшая часть меньше ULP/2, просто отбрасываем её. Переполнение при округлении не возможно - пропускаем проверку.
-            LDI R16,0b00000001          ; Да, симметричное округление. Младшая часть равна ULP/2, округляем к четному.
-            AND R16,MANTP3              ; Извлекаем ULP в R16.
-            ADD MANTP3,R16              ; Если ULP=1, то старшая часть нечетная
-            LDI R16,0                   ; и прибавление R16 (который также содержит 1) даст переход к четному.
-            ADC MANTP4,R16              ; Если же ULP=0, то значение уже четное
-            ADC MANTP5,R16              ; и прибавление R16 (который также содержит 0) никакого эффекта не даст, оставляя значение четным.
+            RJMP CHECKEXP1              ; No, RS=0b01000000 or RS=0b00000000. The lower part is less than ULP/2, so we simply discard it. Overflow during rounding is impossible - skip the check.
+            LDI R16,0b00000001          ; Yes, halfway situation. The lower part equals ULP/2, round to the nearest even value.
+            AND R16,MANTP3              ; Extract ULP into R16.
+            ADD MANTP3,R16              ; If ULP=1, then the higher part is odd
+            LDI R16,0                   ; and adding R16 (which also contains 1) will result in rounding to the nearest even number.
+            ADC MANTP4,R16              ; If ULP=0, then the value is already even,
+            ADC MANTP5,R16              ; and adding R16 (which also contains 0) will have no effect, keeping the value even.
 
             ;
-            ; Проверка мантиссы произведения на переполнение после округления.
+            ; Checking the product's mantissa for overflow after rounding.
 CHECKOVF1:  IN R16,SREG                 ; 
-            SBRS R16,SREG_C             ; Округление дало переполнение?
-            RJMP CHECKEXP1              ; Нет, переходим к проверке экспоненты.
-            ROR MANTP5                  ; Да, нормализуем мантиссу произведения вправо на 1 разряд.
+            SBRS R16,SREG_C             ; Did rounding cause an overflow?
+            RJMP CHECKEXP1              ; No, let's proceed to the exponent check.
+            ROR MANTP5                  ; Normalize the mantissa of the product to the right by 1 bit.
             ROR MANTP4                  ;
             ROR MANTP3                  ;
 
-            LDI R16,1                   ; Корректируем экспоненту.
+            LDI R16,1                   ; Correct the exponent.
             ADD EXPA0,R16               ;
             LDI R16,0                   ;
             ADC EXPA1,R16               ;
 
             ;
-            ; Проверка итогового произведения на переполнение/антипереполнение по экспоненте.
+            ; Check the final product for exponent overflow/underflow.
             ;
-            ; Если экспонента меньше -126 (-126+127=1 в коде со смещением), то произведение слишком мало для представления в одинарном float и мы переходим к нулю.
-            ; Если экспонента больше 127 (127+127=254 в коде со смещением), то произведение слишком велико и мы выбрасываем исключение.
-CHECKEXP1:  MOV R18,EXPR0               ; Копируем расширенную экспоненту произведения.
+            ; If the exponent is less than -126 (-126+127=1 in biased representation), then the product is too small to be represented as a single float and we flush to zero.
+            ; If the exponent is greater than 127 (127+127=254 in biased representation), then the product is too large, and we throw an exception.
+CHECKEXP1:  MOV R18,EXPR0               ; Copy the extended exponent of the product.
             MOV R19,EXPR1               ;
 
-            LDI R16,255                 ; Формируем -1 в доп. коде.
+            LDI R16,255                 ; Form -1 in two's complement.
             LDI R17,255                 ; 
-            ADD R16,R18                 ; Если истинная экспонента меньше минимального представимого значения (-126),
-            ADC R17,R19                 ; то в коде со смещением после вычитания единицы будет получено отрицательное число.
+            ADD R16,R18                 ; If the unbiased exponent is less than the minimum representable value (-126),
+            ADC R17,R19                 ; then in the biased representation, subtracting one will yield a negative number.
             IN R16,SREG                 ; 
-            SBRC R16,SREG_N             ; Истинная экспонента меньше -126?
-            RJMP SETZERO                ; Да, антипереполнение, возвращаем ноль.
+            SBRC R16,SREG_N             ; Is the unbiased exponent less than -126?
+            RJMP SETZERO                ; Yes, underflow; return zero.
                                         ; 
-            LDI R16,1                   ; Нет, проверяем экспоненту на переполнение.
-            LDI R17,0                   ; Если истинная экспонента больше максимального представимого значения (127),
-            ADD R16,R18                 ; то в коде со смещением после прибавления единицы старший байт расширенной экспоненты будет отличен от нуля.
-            ADC R17,R19                 ; Истинная экспонента меньше 128?
-            BREQ PACKPROD               ; Да, переполнения нет, переходим к упаковке.
-            IJMP                        ; Нет, переполнение, прыжок на обработчик ошибок, указанный в Z.
+            LDI R16,1                   ; No, check the exponent for overflow.
+            LDI R17,0                   ; If the true exponent is greater than the maximum representable value (127),
+            ADD R16,R18                 ; then after adding one to the biased exponent, its higher byte will be non-zero.
+            ADC R17,R19                 ; Is the unbiased exponent less than 128?
+            BREQ PACKPROD               ; Yes, no overflow; proceed to packing.
+            IJMP                        ; No, overflow; jump to the error handler pointed to by Z.
             
             ;
-            ; Упаковка мантиссы и экспоненты произведения.
-PACKPROD:   ROL MANTP3                  ; Сдвигаем мантиссу влево, убирая целочисленную единицу.
-            ROL MANTP4                  ; NOTE: Достаточно сдвинуть только старший байт мантиссы.
+            ; Pack the mantissa and exponent of the product.
+PACKPROD:   ROL MANTP3                  ; Shift the mantissa left, removing the integer one.
+            ROL MANTP4                  ; NOTE: It's enough to shift only the highest byte of the mantissa.
             ROL MANTP5                  ;
 
-            CLC                         ; Выдвигаем вправо LSB экспоненты в разряд переноса,
-            ROR EXPR0                   ; одновременно освобождая MSB под знак.
+            CLC                         ; Shift the LSB of the exponent to the carry bit,
+            ROR EXPR0                   ; while simultaneously freeing the MSB for the sign.
 
-            ROR MANTP5                  ; Возвращаем мантиссу на место
-            ROR MANTP4                  ; с LSB экспоненты вместо целочисленной единицы.
+            ROR MANTP5                  ; Restore the mantissa to its position
+            ROR MANTP4                  ; replacing the integer one with the LSB of the exponent.
             ROR MANTP3                  ;
 
-            OR EXPR0,RSIGN              ; Устанавливаем разряд знака.
+            OR EXPR0,RSIGN              ; Set the sign bit.
 
-            MOV MANTA0,MANTP3           ; Запись мантиссы произведения на место мантиссы множимого.
+            MOV MANTA0,MANTP3           ; Write the mantissa of the product to the position of the multiplicand's mantissa.
             MOV MANTA1,MANTP4
             MOV MANTA2,MANTP5
 
             RJMP EXIT
 
-            ; Выход из FMUL32.
+            ; Exit from FMUL32.
 EXIT:       RET
 
             ;
-            ; Установка результата в ноль.
+            ; Set the result to zero.
             ;
-            ; Выполняется в следующих случаях:
-            ; - Антипереполнение результата для любой операции.
-            ; - Делимое равно нулю.
-            ; - Хотя бы один сомножитель равен нулю.
-            ; - Оба слагаемых равны нулю.
-            ; - Результат вычитания равен нулю.
+            ; Happens in the following cases:
+            ; - Underflow.
+            ; - Dividend is zero.
+            ; - At least one multiplicand is zero.
+            ; - Both addends are zero.
+            ; - The result of subtraction is zero.
 SETZERO:    CLR MANTA0
             CLR MANTA1
             CLR MANTA2
@@ -631,45 +631,45 @@ SETZERO:    CLR MANTA0
             RJMP EXIT
 
 ;
-; Вычисляет разность двух чисел.
+; Computes the difference between two numbers.
 ;
-; Вход:
-;   - R11, R10, R9, R8: Уменьшаемое.
-;   - R15, R14, R13, R12: Вычитаемое.
+; Input:
+;   - R11, R10, R9, R8: The minuend.
+;   - R15, R14, R13, R12: The subtrahend.
 ;
-; Выход:
-;   - R11, R10, R9, R8: Разность.
+; Output:
+;   - R11, R10, R9, R8: The difference.
 FSUB32:     LDI R16,0b10000000          ; B=-B.
             EOR B3,R16                  ;
             RJMP FADD32                 ;
 
 ;
-; Складывает два числа.
+; Adds two numbers.
 ;
-; Вход:
-;   - R11, R10, R9, R8: Первое слагаемое.
-;   - R15, R14, R13, R12: Второе слагаемое.
+; Input:
+;   - R11, R10, R9, R8: The first addend.
+;   - R15, R14, R13, R12: The second addend.
 ;
-; Выход:
-;   - R11, R10, R9, R8: Сумма.
+; Output:
+;   - R11, R10, R9, R8: The sum.
 FADD32:     ;
-            ; Своп.
-            ; Установка наибольшего (по модулю) операнда первым.
-            MOV R0,R8                   ; Копируем A.
+            ; Swap.
+            ; Set the largest (by absolute value) operand as the first.
+            MOV R0,R8                   ; Copy A.
             MOV R1,R9                   ;
             MOV R2,R10                  ;
             MOV R3,R11                  ;
 
-            MOV R4,R12                  ; Копируем B.
+            MOV R4,R12                  ; Copy B.
             MOV R5,R13                  ;
             MOV R6,R14                  ;
             MOV R7,R15                  ;
 
             LDI R16,0b01111111          ;
-            AND R3,R16                  ; Вычисляем |A|.
-            AND R7,R16                  ; Вычисляем |B|.
+            AND R3,R16                  ; Compute |A|.
+            AND R7,R16                  ; Compute |B|.
 
-            COM R4                      ; Вычисляем доп. код |B|.
+            COM R4                      ; Compute the two's complement of |B|.
             COM R5                      ;
             COM R6                      ;
             COM R7                      ;
@@ -681,86 +681,86 @@ FADD32:     ;
             ADC R7,R16                  ;
 
             ADD R4,R0                   ; |A|-|B|.
-            ADC R5,R1                   ; Перезаписываем -|B|, чтобы сохранить нетронутым |A|.
-            ADC R6,R2                   ; 
+            ADC R5,R1                   ; Overwrite -|B| to preserve the untouched |A|.
+            ADC R6,R2                   ;
             ADC R7,R3                   ;
                                         ; |A|-|B|>=0?
-            BRGE HANDLEZERO             ; Да, своп не нужен. Переходим к обработке нулевых операндов.
-                                        ; Нет, делаем своп.
-            MOV R3,R11                  ; Бэкапим A. Но поскольку регистры R0..R3 уже хранят |A|, остается только восстановить знак.
+            BRGE HANDLEZERO             ; Yes, no swap is needed. Proceed to handling zero operands.
+                                        ; No, perform the swap.
+            MOV R3,R11                  ; Backup A. Since registers R0..R3 already store |A|, to backup A we just restore the sign for |A|.
             
-            MOV R8,R12                  ; Записываем B на место A.
+            MOV R8,R12                  ; Store B in the place of A.
             MOV R9,R13                  ;
             MOV R10,R14                 ;
             MOV R11,R15                 ;
 
-            MOV R12,R0                  ; Восстанавливаем из бэкапа A на место B.
+            MOV R12,R0                  ; Restore A to the position of B.
             MOV R13,R1                  ;
             MOV R14,R2                  ;
             MOV R15,R3                  ;
 
             ;
-            ; Обработка нулевых операндов.
+            ; Handle zero operands.
             ;
-            ; Возможные ситуации до свопа (где 1 - любое ненулевое значение операнда):
+            ; Possible scenarios before the swap (where 1 is any non-zero operand value):
             ; 0,0
             ; 0,1
             ; 1,0
             ; 1,1
             ;
-            ; После свопа остаются только следующие варианты:
+            ; After the swap, only the following scenarios remain:
             ; 0,0
             ; 1,0
             ; 1,1
             ;
-            ; Следовательно, если после свопа первый операнд нулевой, значит оба нулевые, результат - ноль.
-            ; Если второй операнд нулевой, значит первый ненулевой, результат - первый операнд.
+            ; Therefore, if the first operand is zero after the swap, both operands are zero, and the result is zero.
+            ; If the second operand is zero, the first operand is non-zero, and the result is the first operand.
 HANDLEZERO: CLR R16                     ;
             OR R16,MANTA0               ;
             OR R16,MANTA1               ;
             OR R16,MANTA2               ;
             OR R16,EXPA0                ; A=0?
-            BREQ SETZERO                ; Да, и A и B равны нулю, возвращаем ноль.
+            BREQ SETZERO                ; Yes, both A and B are zero; return zero.
 
-            CLR R16                     ; Нет, проверяем B.
+            CLR R16                     ; No, check B.
             OR R16,MANTB0               ;
             OR R16,MANTB1               ;
             OR R16,MANTB2               ;
             OR R16,EXPB0                ; B=0?
-            BREQ EXIT                   ; Да, возвращаем A (A уже находится в регистре результата).
-                                        ; Нет, ни A ни B не равны нулю, продолжаем вычисления.
+            BREQ EXIT                   ; Yes, return A (A is already in the result register).
+                                        ; No, neither A nor B is zero; continue the calculations.
 
             ;
-            ; Определение знака суммы.
+            ; Determine the sign of the sum.
             ;
-            ; Берется знак операнда A, который после свопа удовлетворяет выражению |A|>=|B|.
-            ; Если |A|>|B| и знаки разные, то знак разности равен знаку наибольшего (по модулю) операнда, т.е. A.
-            ; Если же знаки одинаковые, то знак суммы равен знаку любого операнда, в т.ч. A.
-            ; Если |A|=|B| и знаки одинаковые, то знак суммы также равен знаку любого операнда, в т.ч. A.
-            ; Если же знаки разные, то в силу равенства модулей, разность будет равна нулю и будет установлен положительный знак, независимо от знаков A и B.
-CALCSIGN:   MOV RSIGN,R11               ; Копируем старший байт A.
-            LDI R16,0b10000000          ; Формируем маску для извлечения знака, который хранится в MSB.
-            AND RSIGN,R16               ; Извлекаем знак A.
+            ; Take the sign of operand A, which, after the swap, satisfies the expression |A|>=|B|.
+            ; If |A|>|B| and the signs are different, then the sign of the difference is equal to the sign of the largest (by absolute value) operand, i.e., A.
+            ; If the signs are the same, then the sign of the sum is equal to the sign of either operand, including A.
+            ; If |A|=|B| and the signs are the same, then the sign of the sum is also equal to the sign of either operand, including A.
+            ; If the signs are different, then due to the equality of the absolute values, the difference will be zero and a positive sign will be set, regardless of the signs of A and B.
+CALCSIGN:   MOV RSIGN,R11               ; Copy the high byte of A.
+            LDI R16,0b10000000          ; Create a mask to extract the sign stored in the MSB.
+            AND RSIGN,R16               ; Extract the sign of A.
 
             ;
-            ; Бэкап знака B.
+            ; Backup the sign of B.
             ; 
-            ; Он будет нужен для определения операции: сложение или вычитание.
-            MOV R1,R15                  ; Копируем старший байт B.
-            AND R1,R16                  ; Извлекаем знак B. Маска знака уже содержится в R16.
+            ; It will be needed to determine the operation: addition or subtraction.
+            MOV R1,R15                  ; Copy the high byte of B.
+            AND R1,R16                  ; Extract the sign of B. The sign mask is already stored in R16.
 
             ;
-            ; Распаковка операндов.
-            ROL R8                      ; Распаковка A.
+            ; Unpack the operands.
+            ROL R8                      ; Unpack A.
             ROL R9                      ;
-            ROL R10                     ; Выдвигаем в бит переноса LSB экспоненты.
-            ROL R11                     ; Восстанавливаем экспоненту в старшем байте.
-            SEC                         ; Восстанавливаем в мантиссе A неявную единицу.
+            ROL R10                     ; Shift the LSB of the exponent into the carry bit.
+            ROL R11                     ; Restore the exponent in the high byte.
+            SEC                         ; Restore the implicit one in the mantissa of A.
             ROR R10                     ;
             ROR R9                      ;
             ROR R8                      ;
 
-            ROL R12                     ; Распаковка B
+            ROL R12                     ; Unpack B
             ROL R13                     ;
             ROL R14                     ;
             ROL R15                     ;
@@ -770,96 +770,96 @@ CALCSIGN:   MOV RSIGN,R11               ; Копируем старший бай
             ROR R12                     ;
 
             ;
-            ; Расширяем экспоненту A на один байт влево.
+            ; Extend the exponent of A by one byte to the left.
             CLR EXPA1                   ;
 
             ;
-            ; Расширение мантисс до RGS.
+            ; Extend the mantissas to RGS.
             ;
-            ; Эти регистры стыкуются справа от мантиссы A и B.
-            CLR R6                      ; RGS мантиссы A.
-            CLR R7                      ; RGS мантиссы B.
+            ; These registers are appended to the right of the mantissas of A and B.
+            CLR R6                      ; RGS of the mantissa of A.
+            CLR R7                      ; RGS of the mantissa of B.
 
             ;
-            ; Выравнивание порядков.
+            ; Aligning the exponents.
             ;
-            ; Экспоненты обоих операндов представлены в коде со смещением и принимают значения в отрезке [1,254].
-            ; После свопа порядок A будет либо больше либо равен порядку B. Это значит, что разность экспонент лежит в отрезке [0,253].
-            ; Из всего этого следует, что нет необходимости вычислять корректный доп. код в двойной сетке (см. обоснование в доке).
+            ; The exponents of both operands are biased and take values in the range [1,254].
+            ; After the swap, the exponent of A will be either greater than or equal to the exponent of B. This means that the difference of the exponents lies in the range [0,253].
+            ; From this, it follows that there is no need to calculate the correct two's complement in the double grid (see justification in the documentation).
             ;
-            ; Здесь может потребоваться окруление до S-бита при денормализации мантиссы B.
-            MOV R17,EXPA0               ; Копируем экспоненту A.
-            MOV R16,EXPB0               ; Копируем экспоненту B.
-            COM R16                     ; Вычисляем младший байт доп. кода экспоненты B.
+            ; Rounding to the S-bit may be required when denormalizing the mantissa of B.
+            MOV R17,EXPA0               ; Copy the exponent of A.
+            MOV R16,EXPB0               ; Copy the exponent of B.
+            COM R16                     ; Calculate the lower byte of the two's complement of the exponent of B.
             INC R16                     ;
-            ADD R17,R16                 ; EXP(A)-EXP(B)=0? [NOTE: R17 теперь содержит разность экспонент в отрезке [0,253].]
-            BREQ CHOOSEOP               ; Да, порядки равны, выравнивание не требуется.
-            LDI R16,31                  ; Нет, выясняем, в каком отрезке лежит разность: [1,30] или [31,253].
-            COM R16                     ; Формируем доп. код числа -31 в пределах байта. [NOTE: Необходимости в двойной сетке нет.]
+            ADD R17,R16                 ; EXP(A)-EXP(B)=0? NOTE: R17 now contains the difference of the exponents in the range [0,253].
+            BREQ CHOOSEOP               ; Yes, the exponents are equal; alignment is not required.
+            LDI R16,31                  ; No, determine which range the difference falls into: [1,30] or [31,253]. NOTE: We've extended RGS on the whole byte.
+            COM R16                     ; Form the two's complement of -31 within a byte. NOTE: There is no need for a double grid.
             INC R16                     ;
-            ADD R16,R17                 ; (EXP(A)-EXP(B))-31<0? [NOTE: Если истинная разность в двойной сетке отрицательная, то бита переноса из младшего байта не будет.]
-            BRCC SHIFTMANTB             ; Да, разность в отрезке [1,30], сдвигаем мантиссу B и формируем S-бит.
-            CLR MANTB0                  ; Нет, разность в отрезке [31,253];
-            CLR MANTB1                  ; просто устанавливаем значение мантиссы B как 2^-31 (округление до S-бита).
+            ADD R16,R17                 ; (EXP(A)-EXP(B))-31<0? NOTE: If the true difference in the double grid is negative, there will be no carry bit from the lower byte.
+            BRCC SHIFTMANTB             ; Yes, the difference is in the range [1,30]; shift the mantissa of B and form the S-bit.
+            CLR MANTB0                  ; No, the difference is in the range [31,253];
+            CLR MANTB1                  ; set the value of the mantissa of B to 2^-31 (rounding to the S-bit).
             CLR MANTB2                  ;
             LDI R16,0b00000001          ;
             MOV R7,R16                  ;
             RJMP CHOOSEOP               ;
 
             ;
-            ; Пошаговый сдвиг мантиссы B на разность экспонент вправо.
+            ; Shift the mantissa of B right step-by-step by the exponent difference.
             ;
-            ; Разность экспонент здесь принимает значения в отрезке [1,30].
-            ; Если за пределами RGS-зоны оказался хотя бы один единичный бит, то происходит установка S-бита.
-SHIFTMANTB: CLR R16                     ; R16 будет хранить в LSB значение бита переноса после каждого сдвига.
+            ; The exponent difference here takes values in the range [1,30].
+            ; If at least one bit outside the RGS zone is set to 1, the S-bit is set.
+SHIFTMANTB: CLR R16                     ; R16 will store the carry bit value in the LSB after each shift.
             CLC                         ;
-            ROR MANTB2                  ; Сдвигаем мантиссу B вправо на 1 разряд вместе с RGS-битами.
+            ROR MANTB2                  ; Shift the mantissa of B right by 1 bit along with the RGS bits.
             ROR MANTB1                  ;
             ROR MANTB0                  ;
             ROR R7                      ;
-            ROL R16                     ; Извлекаем бит переноса в R16.
-            OR R7,R16                   ; Если C!=0, значит за пределами RGS оказался единичный бит, значит устанавливаем S-бит.
+            ROL R16                     ; Extract the carry bit into R16.
+            OR R7,R16                   ; If C!=0, a non-zero bit exists outside the RGS, so set the S-bit.
 
-            DEC R17                     ; Мантисса B сдвинута на разность порядков?
-            BREQ CHOOSEOP               ; Да, переходим к выбору арифметической операции.
-            RJMP SHIFTMANTB             ; Нет, сдвигаем дальше.
+            DEC R17                     ; Is the mantissa of B shifted by the exponent difference?
+            BREQ CHOOSEOP               ; Yes, proceeding to select the arithmetic operation.
+            RJMP SHIFTMANTB             ; No, continue shifting.
 
             ;
-            ; Выбор арифметической операции.
+            ; Selection of the arithmetic operation.
 CHOOSEOP:   EOR R1,R0                   ; SIGN(A)=SIGN(B)?
-            BRNE DIFF                   ; Нет, знаки разные, переходим к вычитанию.
-                                        ; Да, вычисляем сумму.
+            BRNE DIFF                   ; No, signs differ, proceed to subtraction.
+                                        ; Yes, calculate the sum.
 
             ;
-            ; Вычисление суммы модулей мантисс.
+            ; Calculation of the sum of mantissa magnitudes.
             ;
-            ; Здесь возможно только переполнение результата.
-            ; Мантисса суммы записывается на место мантиссы A.
-SUM:        ADD R6,R7                   ; Складываем мантиссы A и B.
-            ADD R8,R12                  ; У мантиссы A RGS-зона всегда нулевая, поэтому бит переноса не возможен.
+            ; Only overflow is possible here.
+            ; The sum is written in place of mantissa A.
+SUM:        ADD R6,R7                   ; Add mantissas A and B.
+            ADD R8,R12                  ; The RGS zone of mantissa A is always zero, so a carry bit is not possible.
             ADC R9,R13                  ;
             ADC R10,R14                 ;
-                                        ; Переполнение есть?
-            BRCC ROUNDSUM               ; Нет, переходим к округлению.
-            ROR R10                     ; Да, нормализуем мантиссу вправо.
+                                        ; Is there an overflow?
+            BRCC ROUNDSUM               ; No, proceed to rounding.
+            ROR R10                     ; Yes, normalize the mantissa to the right.
             ROR R9                      ;
             ROR R8                      ;
             ROR R6                      ;
-            CLR R16                     ; Устанавливаем S-бит, если при нормализации был потерян единичный бит.
+            CLR R16                     ; Set the S-bit if a non-zero bit was lost during normalization.
             ROL R16                     ; 
             OR R6,R16                   ;
-            INC EXPA0                   ; Корректируем экспоненту.
-            RJMP ROUNDSUM               ; В худшем случае экспонента уже равна 254, поэтому прибавление единицы не даст бит переноса в старший байт.
+            INC EXPA0                   ; Adjust the exponent.
+            RJMP ROUNDSUM               ; In the worst case, the exponent is already 254, so adding one will not produce a carry bit in the highest byte.
             
             ;
-            ; Вычисление разности модулей мантисс.
+            ; Calculation of the difference between mantissa magnitudes.
             ;
-            ; NOTE: Здесь в худшем случае возможна денормализация результата вправо в отрезке [0,24] при A=1 и B=((2^24)-1)*2^-23*2^-1.
-            ; Допустим, что после вычитания мы можем получить денормализацию больше, чем на 24 разряда вправо (при этом помним, что мантисса A всегда нормализована),
-            ; тогда мантисса числа B должна содержать больше, чем 24 разряда, что невозможно.
-DIFF:       COM R7                      ; Вычисляем псевдо доп. код мантиссы B. Это дополнение до 2 вместо 4.
-            COM MANTB0                  ; Результат всегда положительный, поэтому нет необходимости в истинном доп. коде: в доп. бите слева всегда
-            COM MANTB1                  ; будет единица, а из младшей части всегда будет бит переноса, зануляющий разряд истинного доп. кода.
+            ; NOTE: In the worst case, denormalization of the result to the right may occur within the range [0,24] when A=1 and B=((2^24)-1)*2^-23*2^-1.
+            ; Assuming that after subtraction we could get a denormalization by more than 24 bits to the right (keeping in mind that the mantissa of A is always normalized),
+            ; the mantissa of B would need to have more than 24 bits, which is impossible.
+DIFF:       COM R7                      ; Calculate the pseudo two's complement of the mantissa B. This is a complement to 2 instead of 4.
+            COM MANTB0                  ; The result is always positive, so a true two's complement is not required: the most significant bit
+            COM MANTB1                  ; will always be 1, and the lower part will always generate a carry bit, zeroing out the MSB of the true two's complement.
             COM MANTB2                  ;
             LDI R16,1                   ;
             ADD R7,R16                  ;
@@ -868,126 +868,126 @@ DIFF:       COM R7                      ; Вычисляем псевдо доп
             ADC MANTB1,R16              ;
             ADC MANTB2,R16              ;
 
-            LDI SREGACC,0b00000010      ; Маска для Z-флага.
-            ADD R6,R7                   ; Складываем RGS-регистры.
-            IN R16,SREG                 ; Извлекаем из регистра статуса только Z-флаг.
+            LDI SREGACC,0b00000010      ; Mask for the Z-flag.
+            ADD R6,R7                   ; Add the RGS registers.
+            IN R16,SREG                 ; Extract only the Z-flag from the status register.
             AND SREGACC,R16             ;
-            ADD MANTA0,MANTB0           ; Складываем следующую пару байт мантисс. NOTE: У мантиссы A RGS-зона всегда нулевая, поэтому бит переноса из предыдущей операции не возможен.
+            ADD MANTA0,MANTB0           ; Add the next pair of mantissa bytes. NOTE: Mantissa A always has a zeroed RGS zone, so no carry bit from the previous operation is possible.
             IN R16,SREG                 ;
             AND SREGACC,R16             ;
-            ADC MANTA1,MANTB1           ; Складываем следующую пару байт.
+            ADC MANTA1,MANTB1           ; Add the next pair of bytes.
             IN R16,SREG                 ;
             AND SREGACC,R16             ;
-            ADC MANTA2,MANTB2           ; Складываем последнюю пару байт.
+            ADC MANTA2,MANTB2           ; Add the next pair of bytes.
             IN R16,SREG                 ;
-            AND SREGACC,R16             ; Результат нулевой? NOTE: SREGACC=(STATUS0)&(STATUS1)&(STATUS2)&(STATUS3)&(0b00000010), где STATUS<N> - регистр статуса после сложения очередной пары байт мантисс.
-            BRNE SETZERO1               ; Да, устанавливаем положительный ноль. NOTE: Если флаг Z был установлен для каждой пары байт, то SREGACC окажется ненулевым.
+            AND SREGACC,R16             ; Is the result zero? NOTE: SREGACC=(STATUS0)&(STATUS1)&(STATUS2)&(STATUS3)&(0b00000010), where STATUS<N> is the status register after adding another pair of mantissa bytes.
+            BRNE SETZERO1               ; Yes, set positive zero. NOTE: If the Z flag was set for each pair of bytes, SREGACC will be non-zero.
 
-            SBRC MANTA2,7               ; Мантисса разности денормализована?
-            RJMP ROUNDSUM               ; Нет, мантисса нормализована, переходим к округлению.
-                                        ; Да, выполняем нормализацию и коррекцию экспоненты.
-            CLR R16                     ; Счетчик степени денормализации.
-            LDI R17,255                 ; Увеличиваем счетчик степени денормализации на -1, получая отрицательное значение сразу в доп. коде.
+            SBRC MANTA2,7               ; Is the difference mantissa denormalized?
+            RJMP ROUNDSUM               ; No, the mantissa is normalized, proceed to rounding.
+                                        ; Yes, normalize and adjust the exponent.
+            CLR R16                     ; Accumulates the degree of denormalization.
+            LDI R17,255                 ; We increase the degree of denormalization by -1 getting its negative value directly in two's complement.
 NORM:       CLC                         ;
-            ROL R6                      ; Нормализуем влево.
+            ROL R6                      ; Normalize left.
             ROL MANTA0                  ;
             ROL MANTA1                  ;
             ROL MANTA2                  ;
-            ADD R16,R17                 ; DEC R16. NOTE: Конечно, мы могли бы использовать инструкцию DEC.
-            SBRS MANTA2,7               ; Мантисса разности нормализовалась?
-            RJMP NORM                   ; Нет, продолжаем сдвиг.
-            ADD EXPA0,R16               ; Да, корректируем экспоненту: EXPA-K, где K=R16 - степень денормализации.
-            ADC EXPA1,R17               ; R17,R16: расширили доп. код R16 до двух байт (воспользовались тем, что R17 уже содержит 255).
+            ADD R16,R17                 ; DEC R16. NOTE: Of course we could use native DEC instruction.
+            SBRS MANTA2,7               ; Has the mantissa of the difference been normalized?
+            RJMP NORM                   ; No, continue shifting.
+            ADD EXPA0,R16               ; Yes, adjust the exponent: EXPA-K, where K=R16 is the degree of denormalization.
+            ADC EXPA1,R17               ; R17,R16: expanded the two's complement in R16 to two bytes, leveraging that R17 already holds the value 255.
 
             ;
-            ; Округление.
+            ; Rounding.
             ;
-            ; После сдвига R-бита происходит проверка C- и Z-битов в регистре статуса.
-            ; Если C=1 и Z=0 после сдвига, то это ситуация симметричного округления, иначе - округление в большую сторону.
-ROUNDSUM:   MOV R16,R6                  ; Копируем RGS.
+            ; After shifting the R-bit left, the C and Z flags in the status register are checked.
+            ; If C=1 and Z=0 after the shift, it indicates halfway rounding; otherwise, it is rounding up.
+ROUNDSUM:   MOV R16,R6                  ; Copy RGS.
             CLC                         ;
-            ROL R16                     ; R-бит равен нулю?
-            BRCC CHECKEXP2              ; Да, RGS=000|001|010|011. Отбрасываем RGS, ошибка ERR<ULP/2.
-            BREQ HALFWAY1               ; Нет, RGS=100, симметричное округление, ERR=ULP/2.
-            LDI R16,1                   ; Нет, RGS=101|110|111.
-            RJMP ADDULP                 ; Отбрасываем RGS и прибавляем ULP. Ошибка ERR<ULP/2.
+            ROL R16                     ; Is the R-bit zero?
+            BRCC CHECKEXP2              ; Yes, RGS=000|001|010|011. Discard RGS, ERR<ULP/2.
+            BREQ HALFWAY1               ; No, RGS=100, halfway rounding, ERR=ULP/2.
+            LDI R16,1                   ; No, RGS=101|110|111.
+            RJMP ADDULP                 ; Discard RGS and add ULP. ERR<ULP/2.
 
-HALFWAY1:   LDI R16,1                   ; Извлекаем значение разряда ULP.
+HALFWAY1:   LDI R16,1                   ; Extract the value of the ULP bit.
             AND R16,R8                  ;
-ADDULP:     ADD R8,R16                  ; Прибавляем ULP.
-            CLR R16                     ; Если значение нечетное, то ULP=1, и прибавление ULP даст четный результат.
-            ADC R9,R16                  ; Если значение уже четное, то ULP=0, и прибавление нуля не изменит результат.
-            ADC R10,R16                 ; Есть переполнение?
-            BRCC CHECKEXP2              ; Нет, переходим к проверке экспоненты.
-            ROR MANTA2                  ; Да, нормализуем мантиссу A. Поскольку переполнение при округлении, два младших байта мантиссы уже нулевые.
-            INC EXPA0                   ; Корректируем экспоненту. 
+ADDULP:     ADD R8,R16                  ; Add ULP.
+            CLR R16                     ; If the value is odd, adding ULP=1 makes the result even.
+            ADC R9,R16                  ; If the value is already even, ULP=0, and adding zero does not change the result.
+            ADC R10,R16                 ; Is there overflow?
+            BRCC CHECKEXP2              ; No, proceed to the exponent check.
+            ROR MANTA2                  ; Yes, normalize mantissa A. Since there was an overflow during rounding, the two least significant bytes of the mantissa are already zero.
+            INC EXPA0                   ; Adjust the exponent.
 
             ;
-            ; Проверка экспоненты на переполнение/антипереполнение.
+            ; Check the exponent for overflow/underflow.
             ;
-            ; Экспонента в коде со смещением принимает значения в отрезке [-22,255].
-            ; NOTE: Возьмем разность чисел A=1*2^-125 и B=((2^24)-1)*2^-23*2^-126.
-            ; Эта разность даст максимальную денормализацию вправо на 24 разряда.
-            ; Следовательно, после нормализации порядок разности будет равен -125-24=-149 или -149+127=-22 в коде со смещением.
-            ; Точно такой же вывод получим, взяв A=(1+2^-23)*2^-126 и B=1*2^-126.
+            ; The biased exponent ranges from -22 to 255.
+            ; NOTE: Consider the difference between A=1*2^-125 and B=((2^24)-1)*2^-23*2^-126.
+            ; This difference results in a maximum right denormalization of 24 bits.
+            ; Therefore, after normalization, the exponent of the difference will be equal to -125-24=-149 or -149+127=-22 in biased representation.
+            ; The same conclusion can be reached by taking A=(1+2^-23)*2^-126 and B=1*2^-126.
             ;
-            ; Если есть переполнение, то экспонента равна 255 и вычитание её из 255 даст ноль.
-            ; Если нет переполнения, то вычитание экспоненты из 255 даст положительное значение.
-            ; Если есть антипереполнение, то экспонента принимает значения в отрезке [-22,0] и вычитание единицы из экспоненты всегда даст отрицательное значение.
-            ; Если нет антипереполнения, то, поскольку переполнение уже исключено, экспонента лежит в [1,254] и вычитание единицы всегда даст неотрицательное значение.
-CHECKEXP2:  LDI R17,255                 ; Записываем 255 в два байта.
+            ; If there is an overflow, the exponent is 255, and subtracting it from 255 results in zero.
+            ; If there is no overflow, subtracting the exponent from 255 will yield a positive value.
+            ; If there is underflow, the exponent takes values in the range [-22,0], and subtracting one from the exponent will always yield a negative value.
+            ; If there is no underflow, then, since overflow is already excluded, the exponent lies in [1,254], and subtracting one will always yield a non-negative value.
+CHECKEXP2:  LDI R17,255                 ; Write 255 into two bytes.
             LDI R18,0                   ;
 
-            MOV R21,EXPA0               ; Копируем расширенную экспоненту A.
+            MOV R21,EXPA0               ; Copy the extended exponent of A.
             MOV R22,EXPA1               ;
 
-            COM R21                     ; Вычисляем доп. код экспоненты в двух байтах.
-            COM R22                     ; NOTE: Необходимости в доп. коде в двойной сетке нет:
-            LDI R16,1                   ; достаточно проверить результат вычитания на ноль и проверить бит переноса.
+            COM R21                     ; Calculate the two-byte two's complement of the exponent.
+            COM R22                     ; NOTE: We don't actually need extended two's complement:
+            LDI R16,1                   ; we could just check first byte of the result for zero and check the carry bit.
             ADD R21,R16                 ;
             CLR R16                     ;
             ADC R22,R16                 ;
 
             ADD R17,R21                 ; 255-EXP(A).
-            IN STATUS0,SREG             ; Сохраняем флаги после сложения младших байт.
+            IN STATUS0,SREG             ; Save flags after adding the lower bytes.
             ADC R18,R22                 ;
-            IN STATUS1,SREG             ; Сохраняем флаги после сложения старших байт.
+            IN STATUS1,SREG             ; Save flags after adding the higher bytes
 
-            AND STATUS0,STATUS1         ; Результат нулевой, если флаг Z был установлен для каждого байта.
-            SBRC STATUS0,SREG_Z         ; Экспонента равна 255?
-            IJMP                        ; Да, переполнение, прыжок на обработчик ошибок, указанный в регистре Z.
-            LDI R16,255                 ; Нет, проверяем на антипереполнение.
+            AND STATUS0,STATUS1         ; The result is zero if the Z flag was set for each byte.
+            SBRC STATUS0,SREG_Z         ; Is the exponent equal to 255?
+            IJMP                        ; Yes, overflow. Jump to error handler specified in register Z.
+            LDI R16,255                 ; No, check for underflow.
             LDI R17,255                 ;
             ADD R16,EXPA0               ; EXP(A)-1.
-            ADC R17,EXPA1               ; Результат отрицательный?
-            BRMI SETZERO1               ; Да, антипереполнение, экспонента лежит в [0,-22] и не может быть представлена. Возвращаем ноль.
-                                        ; Нет, экспонента лежит в [1,254] и представима в одинарном float.
+            ADC R17,EXPA1               ; Is the result negative?
+            BRMI SETZERO1               ; Yes, underflow; the exponent is in [0,-22] and cannot be represented. Flush to zero.
+                                        ; No, the exponent is in [1,254] and can be represented in single-precision float.
 
             ;
-            ; Упаковка суммы.
-            ROL MANTA0                  ; Выдвигаем целочисленную единицу мантиссы суммы в бит переноса.
+            ; Packing the sum.
+            ROL MANTA0                  ; Shift the integer one of the sum's mantissa into the carry bit.
             ROL MANTA1                  ;
             ROL MANTA2                  ;
-            ROL RSIGN                   ; Выдвигаем знак в бит переноса.
-            ROR EXPA0                   ; Вдвигаем знак в MSB экспоненты и выдвигаем LSB экспоненты в бит переноса.
-            ROR MANTA2                  ; Восстанавливаем исходные биты мантиссы,
-            ROR MANTA1                  ; вдвигая в MSB старшего байта мантиссы вместо целочисленной единицы LSB экспоненты.
+            ROL RSIGN                   ; Shift the sign bit into the carry bit.
+            ROR EXPA0                   ; Insert the sign bit into the MSB of the exponent and shift the LSB of the exponent into the carry bit.
+            ROR MANTA2                  ; Restore the original bits of the mantissa by shifting the LSB of the exponent into the MSB of the higher byte
+            ROR MANTA1                  ; of the mantissa instead of the integer one.
             ROR MANTA0                  ;
 
             RJMP EXIT1
             
-            ; Выход.
+            ; Exit from FADD32.
 EXIT1:      RET
 
             ;
-            ; Установка результата в ноль.
+            ; Set the result to zero.
             ;
-            ; Выполняется в следующих случаях:
-            ; - Антипереполнение результата для любой операции.
-            ; - Делимое равно нулю.
-            ; - Хотя бы один сомножитель равен нулю.
-            ; - Оба слагаемых равны нулю.
-            ; - Результат вычитания равен нулю.
+            ; Executed in the following cases:
+            ; - Underflow of the result for any operation.
+            ; - The dividend is zero.
+            ; - At least one multiplicand is zero.
+            ; - Both addends are zero.
+            ; - The result of subtraction is zero
 SETZERO1:   CLR MANTA0
             CLR MANTA1
             CLR MANTA2
@@ -995,58 +995,58 @@ SETZERO1:   CLR MANTA0
             RJMP EXIT1
 
 ;
-; Усекает число в формате плавающей точки до целого.
+; Truncates a floating-point number to an integer.
 ;
-; Работает только с положительными нормализованными десятичными числами в отрезке [1,10).
-; Таким образом, возвращает целочисленное значение в отрезке [1,9] в пределах байта.
+; Works only with positive normalized decimal numbers in the range [1,10).
+; Thus, it returns an integer value in the range [1,9] within a byte.
 ; 
-; Вход:
-;   - R11, R10, R9, R8: Число NUM.
+; Input:
+;   - R11, R10, R9, R8: A number NUM.
 ;
-; Выход:
-;   - R8: Целая часть NUM.
+; Output:
+;   - R8: Integer part of NUM.
             .DEF A0=R8                  ;
             .DEF A1=R9                  ;
             .DEF A2=R10                 ;
             .DEF A3=R11                 ;
 
-            .DEF STATUS=R21             ; Регистр статуса.
+            .DEF STATUS=R21             ; STATUS regiser.
 
-FTOI:       ROL A2                      ; Распаковываем NUM.
-            ROL A3                      ; A3=EXP(NUM). Поскольку NUM лежит в [1,10), то все биты целой части истинного значения
-            SEC                         ; полностью лежат в старшем байте двоично нормализованной мантиссы и нет необходимости сдвигать младшие байты.
+FTOI:       ROL A2                      ; Unpacking NUM.
+            ROL A3                      ; A3=EXP(NUM). Since NUM is in [1,10), all bits of the integer part of the true decimal value
+            SEC                         ; are entirely contained within the higher byte of the binary normalized mantissa, and there is no need to shift the lower bytes.
             ROR A2                      ;
            
-            CLR A0                      ; Поскольку только A2 содержит биты целой части истинного значения, мы можем использовать A0 для хранения результирующего целого значения.
-            LDI R16,-127                ; A3=EXP(NUM)-127. Экспонента лежит в [127,127+3], значит разность всегда неотрицательная, достаточно доп. кода в пределах байта.
-            ADD A3,R16                  ; Экспонента нулевая? (Если нулевая, то целая часть мантиссы уже представляет целую часть истинного значения, которая равна единице.)
-            BREQ SHFTMSB                ; Да, делаем финальный сдвиг.
-            MOV R16,A3                  ; Нет, устанавливаем счетчик цикла равным экспоненте и денормализуем мантиссу влево.
+            CLR A0                      ; Only A2 contains all bits of the integer part of the true value, so we can use A0 for holding the resulting integer value.
+            LDI R16,-127                ; A3=EXP(NUM)-127. The exponent falls within [127,127+3], so the difference is always non-negative and it's enough to have two's complement within a byte.
+            ADD A3,R16                  ; Is the exponent zero? (If zero, the integer part of the mantissa already represents the integer part of the true value, which is equal to one.)
+            BREQ SHFTMSB                ; Yes, perform the final shift.
+            MOV R16,A3                  ; No, set the loop counter to the exponent value and denormalize the mantissa to the left.
 DENORM:     ROL A2                      ; MANT(A)<<1
             ROL A0                      ;
-            DEC R16                     ; Мантисса денормализована влево на величину экспоненты?
-            BREQ SHFTMSB                ; Да, делаем финальный сдвиг.
-            RJMP DENORM                 ; Нет, продолжаем сдвиг.
+            DEC R16                     ; Is the mantissa denormalized to the left by the value of the exponent?
+            BREQ SHFTMSB                ; Yes, perform the final shift.
+            RJMP DENORM                 ; No, continue shifting.
 
-SHFTMSB:    ROL A2                      ; A0=INT(NUM). (MSB мантиссы содержит LSB целой части истинного значения - выдвигаем его в A0.)
+SHFTMSB:    ROL A2                      ; A0=INT(NUM). (The MSB of the mantissa contains the LSB of the integer part of the true value - shift it into A0.)
             ROL A0                      ;
 
             RET
 
 ;
-; Преобразует однобайтовое целое число в число в формате плавающей точки.
+; Converts a positive one-byte integer to a floating-point number.
 ;
-; Вход:
-;   - R8: Целое число NUM.
+; Input:
+;   - R8: Integer value NUM.
 ;
-; Выход:
-;   - R11, R10, R9, R8: Число в формате плавающей точки.
+; Output: 
+;   - R11, R10, R9, R8: Floating-point representation of NUM.
             .DEF A0=R8                  ;
             .DEF A1=R9                  ;
             .DEF A2=R10                 ;
             .DEF A3=R11                 ;
 
-            .DEF STATUS=R21             ; Регистр статуса.
+            .DEF STATUS=R21             ; STATUS register.
 
 SETZERO3:   CLR A0                      ; A=0.0F.
             CLR A1                      ;
@@ -1055,68 +1055,68 @@ SETZERO3:   CLR A0                      ; A=0.0F.
             RET                         ;
 
 ITOF:       AND A0,A0                   ; NUM=0?
-            BREQ SETZERO3               ; Да, возвращаем 0.0f.
+            BREQ SETZERO3               ; Yes, return 0.0f.
 
-            CLR A1                      ; Младшие байты мантиссы.
+            CLR A1                      ; Lower bytes of the mantissa.
             CLR A2                      ;
-            LDI R16,-1                  ; Байт экспоненты. Инициализируем в -1 для холостого инкремента при первом сдвиге.
-            MOV A3,R16                  ; NOTE: Первый сдвиг не меняет вес LSB целого числа.
+            LDI R16,-1                  ; Exponent byte. Initialize to -1 for a dummy increment during the first shift.
+            MOV A3,R16                  ; NOTE: The first shift does not change the weight of the LSB of the true integer value.
 
-            CLC                         ; A2 нулевой, поэтому последний сдвиг A2 всегда зануляет бит переноса - очищать его на каждой итерации не нужно.
-NORM0:      INC A3                      ; Совмещаем LSB целого числа с MSB мантиссы,
-            ROR A0                      ; получая, по сути, денормализованную влево мантиссу.
-            IN STATUS,SREG              ; Запоминаем флаг Z для A0.
+            CLC                         ; A2 is zero, so the final shift of A2 always clears the carry bit and there is no need to clear it on each iteration.
+NORM0:      INC A3                      ; Combine the LSB of the integer with the MSB of the mantissa,
+            ROR A0                      ; effectively producing a left-denormalized mantissa.
+            IN STATUS,SREG              ; Save the Z flag for A0.
             ROR A2                      ; 
-            SBRS STATUS,SREG_Z          ; Мантисса нормализована? (Если изначально A0=1, то он занулится, а мантисса сразу окажется нормализованной.)
-            RJMP NORM0                  ; Нет, продолжаем нормализацию.
-                                        ; Да, пакуем float.
-            LDI R16,127                 ; Сохраняем экспоненту в коде со смещением.
+            SBRS STATUS,SREG_Z          ; Is the mantissa normalized? (If A0 initially equals 1, it will zero out, and the mantissa will be immediately normalized.)
+            RJMP NORM0                  ; No, continue normalization.
+                                        ; Yes, proceed to packing.
+            LDI R16,127                 ; Make the exponent biased.
             ADD A3,R16                  ;
 
-                                        ; Убираем у мантиссы целочисленную единицу.
-            ROL A2                      ; Входное число размером в байт, поэтому все ненулевые биты уже вмещаются в A2, а A0 и A1 равны нулю.
+                                        ; Remove the integer one from the mantissa.
+            ROL A2                      ; The input number fits within one byte, so all non-zero bits are already in A2, while A0 and A1 are set to zero.
 
-            CLC                         ; Результат будет положительным - разряд знака нулевой.
-            ROR A3                      ; Придвигаем экспоненту к мантиссе без единицы.
+            CLC                         ; The result will be positive – the sign bit is zero.
+            ROR A3                      ; Shift the exponent close to the mantissa without the integer one.
 
-            ROR A2                      ; Размещаем LSB экспоненты в MSB мантиссы.
+            ROR A2                      ; Place the LSB of the exponent into the MSB of the mantissa.
 
             RET
 
 ;
-; Конвертирует нормализованное десятичное число в формате float в ASCII-строку.
+; Converts a normalized decimal number in floating-point representation to an ASCII string.
 ;
-; В основе лежит наивный алгоритм, реализованный в z88dk, но с упрощениями для поддержки только нормализованных десятичных чисел.
+; Based on a naive algorithm implemented in z88dk, but simplified to support only normalized decimal numbers.
 ; [https://github.com/z88dk/z88dk/blob/aa60b9c9e4bab3318b9b10e919919058a4d3aaee/libsrc/math/cimpl/ftoa.c]
 ;
-; Основная идея алгоритма: мы игнорируем тот факт, что десятичное представление исходной двоичной дроби искажается при её масштабировании.
-; Следствие этого допущения - не все десятичные цифры в строке оказываются истинными.
-; Более того, при округлении десятичного строкового представления разряды просто отбрасываются.
+; Main idea of the algorithm: we ignore the fact that the decimal representation of the original binary fraction is distorted when it is scaled.
+; As a result, not all decimal digits in the string are exact.
+; Furthermore, when rounding the decimal string representation, digits are simply truncated.
 ;
-; Вход:
-;   - R11, R10, R9, R8: Число NUM в формате плавающей точки в диапазоне [1,10).
-;   - R12: Количество требуемых цифр PRECISION в строке после десятичной точки.
-;   - XH:XL: Указатель STR на область SRAM, куда будет записана числовая ASCII-строка.
+; Input:
+;   - R11, R10, R9, R8: Floating-point number NUM within the range [1,10).
+;   - R12: Number of required digits PRECISION in the string after the decimal point.
+;   - XH:XL: Pointer STR to the SRAM location where the ASCII string representation of the number will be stored.
 ;
-; Выход:
-;   - XH:XL: Числовая ASCII-строка STR.
+; Output:
+;   - XH:XL: ASCII string representation STR of the number.
             .EQU TEN0=0x00              ; 10.0f.
             .EQU TEN1=0x00              ;
             .EQU TEN2=0x20              ;
             .EQU TEN3=0x41              ;
 
-            .DEF A0=R8                  ; Первый операнд любой арифметической операции: FDIV32,FMUL32,FADD32,FSUB32.
+            .DEF A0=R8                  ; The first operand of any arithmetic operation: FDIV32,FMUL32,FADD32,FSUB32.
             .DEF A1=R9                  ;
             .DEF A2=R10                 ;
             .DEF A3=R11                 ;
 
-            .DEF B0=R12                 ; Второй операнд любой арифметической операции: FDIV32,FMUL32,FADD32,FSUB32.
+            .DEF B0=R12                 ; The second operand of any arithmetic operation: FDIV32,FMUL32,FADD32,FSUB32.
             .DEF B1=R13                 ;
             .DEF B2=R14                 ;
             .DEF B3=R15                 ;
 
             ;
-            ; Формирование строки "0" в случае, когда NUM=0.0f.
+            ; Form the string "0" if NUM = 0.0f.
 SETZERO2:   LDI R16,0x30                ;
             ST X+,R16                   ; *STR++='0'.
             RJMP EXITFTOAN              ;
@@ -1126,20 +1126,20 @@ FTOAN:      CLR R16                     ;
             OR R16,A1                   ;
             OR R16,A2                   ;
             OR R16,A3                   ; NUM=0?
-            BREQ SETZERO2               ; Да, формируем фиксированную строку "0".
+            BREQ SETZERO2               ; Yes, form a fixed string "0".
 
-            PUSH R12                    ; Бэкапим PRECISION, т.к. он находится в одном из входных регистров арифметических операций.
+            PUSH R12                    ; Backup PRECISION, as it is located in one of the input registers for arithmetic operations.
 
-            LDI R16,0b10000000          ; Извлекаем знак NUM.
+            LDI R16,0b10000000          ; Extract the sign of NUM.
             AND R16,A3                  ; NUM>0?
-            BREQ GETINT                 ; Да, NUM уже положительный, продолжаем.
-            EOR A3,R16                  ; Нет, вычисляем модуль NUM=|NUM| и
-            LDI R16,0x2D                ; начинаем строку со знака '-'.
+            BREQ GETINT                 ; Yes, NUM is positive, continue.
+            EOR A3,R16                  ; No, calculate the absolute value NUM=|NUM| and
+            LDI R16,0x2D                ; start the string with the '-' sign.
             ST X+,R16                   ; *STR++='-'.
 
             ;
-            ; Извлечение десятичной цифры целой части.
-GETINT:     PUSH A3                     ; Бэкапим исходный NUM.
+            ; Extract the decimal digit of the integer part.
+GETINT:     PUSH A3                     ; Backup NUM=|NUM|.
             PUSH A2                     ;
             PUSH A1                     ;
             PUSH A0                     ;
@@ -1149,7 +1149,7 @@ GETINT:     PUSH A3                     ; Бэкапим исходный NUM.
             ADD R16,A0                  ;
             ST X+,R16                   ;
 
-            CALL ITOF                   ; A=FDIGIT=FLOAT(DIGIT). Извлеченную цифру имеем теперь не как целое, а как число в float32.
+            CALL ITOF                   ; A=FDIGIT=FLOAT(DIGIT). The extracted digit is now stored as a float32 number, not an integer.
 
             MOV B0,A0                   ; B=A=FDIGIT.
             MOV B1,A1                   ;
@@ -1161,22 +1161,22 @@ GETINT:     PUSH A3                     ; Бэкапим исходный NUM.
             POP A2                      ;
             POP A3                      ;
 
-            CALL FSUB32                 ; A=NUM=FSUB32(NUM,FDIGIT). Теперь из NUM удален целочисленный десятичный разряд, цифру которого мы извлекли.
+            CALL FSUB32                 ; A=NUM=FSUB32(NUM,FDIGIT). Now the integer decimal digit has been removed from NUM, the digit we just extracted.
 
             ;
-            ; Добавление десятичной точки.
+            ; Adding the decimal point to the string.
             LDI R16,0x2E                ; *STR++='.'.
             ST X+,R16                   ;
 
             ;
-            ; Извлечение дробных десятичных разрядов.
+            ; Extracting fractional decimal digits.
             ;
-            ; Входное значение NUM<1.
-            ; NOTE: Минимальное десятичное нормализованное число NUM=2^0=1.
-            ; Максимальное нормализованное NUM=(2^3+2^1)-(2^-23*2^3)=10-2^-20=9.99999904632568359375f.
-            ; Минимальное нормализованное, которое даст ненулевое значение после извлечения целой части равно 2^0+2^-23.
-            ; Таким образом, двоичная экспонента после извлечения целой части лежит в [-23,-1] или [104,126] в коде со смещением.
-            ; А после умножения на 10 экспонента лежит в [-20,3] или [107,130] в коде со смещением.
+            ; Input value NUM<1.
+            ; NOTE: The minimum normalized decimal number NUM=2^0=1.
+            ; The maximum normalized number NUM=(2^3+2^1)-(2^-23*2^3)=10-2^-20=9.99999904632568359375f.
+            ; The minimum normalized value that will yield a non-zero result after extracting the integer part is 2^0+2^-23.
+            ; Thus, the binary exponent after extracting the integer part lies in the range [-23,-1] or [104,126] in biased form.
+            ; And after multiplying by 10, the exponent lies in the range [-20,3] or [107,130] in biased form.
 GETFRAC:    LDI R16,TEN0                ; B=10.0f.
             LDI R17,TEN1                ;
             LDI R18,TEN2                ;
@@ -1186,36 +1186,36 @@ GETFRAC:    LDI R16,TEN0                ; B=10.0f.
             MOV B2,R18                  ;
             MOV B3,R19                  ;
 
-            CALL FMUL32                 ; A=NUM'=FMUL32(NUM,10.0f). После GETINT: A=NUM, NUM<1.
+            CALL FMUL32                 ; A=NUM'=FMUL32(NUM,10.0f). After GETINT: A=NUM,NUM<1.
 
-            PUSH A3                     ; Бэкапим NUM', поскольку далее будем распаковывать его экспоненту.
+            PUSH A3                     ; Back up NUM' as we'll be unpacking its exponent next.
             PUSH A2                     ;
             PUSH A1                     ;
             PUSH A0                     ;
 
-            ROL A2                      ; Если число после извлечения целой части и умножения на 10 все еще меньше единицы,
-            ROL A3                      ; то экспонента будет лежать в [-20,-1] или [107,126] в коде со смещением. Таким образом,
-            LDI R16,-127                ; сумма с доп. кодом числа -127 в пределах байта не даст переноса, что означает, что истинная экспонента отрицательная и число меньше единицы (целая часть нулевая).
-            ADD R16,A3                  ; NUM' лежит в [0,1)? (Если NUM' равен нулю, то поле экспоненты также равно нулю, что также даст отрицательную разность, поэтому это условие оказывается уже покрытым.)
-            BRCS ASCIIDIG1              ; Нет, в целой части ненулевой десятичный дробный разряд, извлекаем его цифру.
-            LDI R16,0x30                ; Да, очередной дробный разряд нулевой, устанавливаем цифру ноль.
+            ROL A2                      ; If the number remains less than one after extracting the integer part and multiplying by 10,
+            ROL A3                      ; the exponent will lie in [-20,-1] or [107,126] in biased form. Therefore,
+            LDI R16,-127                ; adding the two's complement of -127 within a byte will not produce a carry, indicating that the true exponent is negative, and the number is less than one (the integer part is zero).
+            ADD R16,A3                  ; NUM' is in [0,1)? (If NUM' is zero, the exponent field is also zero, which will result in a negative difference so this condition is already covered.)
+            BRCS ASCIIDIG1              ; No, in the integer part of NUM', there is a non-zero decimal fractional digit, extract it.
+            LDI R16,0x30                ; Yes, the next fractional digit is zero, setting the digit to zero.
             ST X+,R16                   ; *STR++='0'.
 
             POP A0                      ; A=NUM'.
-            POP A1                      ; Восстанавливаем состояние, ожидаемое в COND1.
-            POP A2                      ; В стеке - PRECISION.
+            POP A1                      ; Restoring the state expected in COND1.
+            POP A2                      ; Now PRECISION is at the top of the stack.
             POP A3                      ;
 
             RJMP COND1                  ;
 
-ASCIIDIG1:  POP A0                      ; A=NUM', сейчас NUM' - десятичная нормализованная дробь.
-            POP A1                      ; Восстанавливаем исходное значение,
-            POP A2                      ; не поврежденное распаковкой экспоненты.
+ASCIIDIG1:  POP A0                      ; A=NUM', now NUM' is a normalized decimal fraction.
+            POP A1                      ; Restore the original value,
+            POP A2                      ; unaffected by the exponent unpacking.
             POP A3                      ;
 
-            PUSH A3                     ; Снова бэкапим NUM',
-            PUSH A2                     ; поскольку далее нам нужно будет
-            PUSH A1                     ; удалить из него целую часть.
+            PUSH A3                     ; Backup NUM' again,
+            PUSH A2                     ; as we will need to remove
+            PUSH A1                     ; the integer part from it next.
             PUSH A0                     ;
 
             CALL FTOI                   ; A0=DIGIT=INT(NUM').
@@ -1236,71 +1236,71 @@ ASCIIDIG1:  POP A0                      ; A=NUM', сейчас NUM' - десят
             POP A2                      ;
             POP A3                      ;
 
-                                        ; Вычитаем извлеченный дробный разряд из целой части NUM'.
-            CALL FSUB32                 ; A=NUM=FSUB32(NUM',FDIGIT). Теперь снова NUM<1.
+                                        ; Subtract the extracted fractional digit from the integer part of NUM'.
+            CALL FSUB32                 ; A=NUM=FSUB32(NUM',FDIGIT). Now again, NUM<1.
 
 COND1:      POP R16                     ; R16=PRECISION.
-            DEC R16                     ; PRECISION--. Извлекли заданное число дробных разрядов?
-            BREQ EXITFTOAN              ; Да, STR содержит десятичные цифры числа NUM, стек - адрес возврата.
-            PUSH R16                    ; Нет, снова бэкапим PRECISION и
-            RJMP GETFRAC                ; извлекаем следующий десятичный дробный разряд.
+            DEC R16                     ; PRECISION--. Did we extract the specified number of fractional digits?
+            BREQ EXITFTOAN              ; Yes, STR contains the decimal digits of the number NUM, the stack holds the return address.
+            PUSH R16                    ; No, we back up PRECISION again and
+            RJMP GETFRAC                ; extract the next decimal fractional digit.
 
 EXITFTOAN:  LDI R16,0                   ;
-            ST X,R16                    ; Добавляем конец строки '\0'.
+            ST X,R16                    ; Add the end of the line '\0'.
             RET
 
 ;
-; Формирует ASCII-строку с десятичным представлением переменной типа float в экспоненциальной форме.
+; Forms an ASCII string with the decimal representation of a float variable in exponential form.
 ;
-; Если число уже нормализовано десятично, то просто выполняется конвертация в строку через FTOAN
-; с учётом ограничения на максимальную длину строки MAXLEN.
+; If the number is already decimal-normalized, conversion to a string is simply performed via FTOAN,
+; considering the maximum string length limit MAXLEN.
 ;
-; Иначе выполняется десятичная нормализация числа, затем происходит конвертация нормализованного числа
-; в строку через FTOAN, но с ограниченным количеством знаков после точки, таким, чтобы длина результирующей
-; строки (вместе со знаком минуса, десятичной точкой и экспонентой) не превысила MAXLEN.
+; Otherwise, decimal normalization of the number is performed, followed by conversion of the normalized number
+; to a string via FTOAN, with a limited number of digits after the decimal point to ensure that the total
+; length of the resulting string (including the minus sign, decimal point, and exponent) does not exceed MAXLEN.
 ;
-; Вход:
-;   - R11, R10, R9, R8: Число NUM.
-;   - R12: Максимальная длина выходной строки MAXLEN. Сейчас ожидается значение 16 - кол-во символов в LCD1602.
-;   - XH:XL: Указатель STR на область SRAM, куда будет записана ASCII-строка.
+; Input:
+;   - R11, R10, R9, R8: The floating-point number NUM.
+;   - R12: The maximum output string length MAXLEN. Currently expected to be 16, matching the character limit of the LCD1602.
+;   - XH:XL: Pointer STR to the SRAM area where the ASCII string will be stored.
 ;
-; Выход:
-;   - XH:XL: ASCII-строка по адресу XH:XL.
-            .DEF EXP=R0                 ; Значение двоичной экспоненты.
+; Output:
+;   - XH:XL: ASCII string located at address XH:XL.
+            .DEF EXP=R0                 ; Binary exponent value.
 
-            .DEF A0=R8                  ; Первый операнд любой арифметической операции: FDIV32,FMUL32,FADD32,FSUB32.
-            .DEF A1=R9                  ; Также содержит входной операнд NUM.
+            .DEF A0=R8                  ; First operand of any arithmetic operation: FDIV32,FMUL32,FADD32,FSUB32.
+            .DEF A1=R9                  ; It also holds NUM value.
             .DEF A2=R10                 ;
             .DEF A3=R11                 ;
 
-            .DEF MAXLEN=R12             ; Максимальная длина выходной строки с десятичным представлением NUM.
+            .DEF MAXLEN=R12             ; Maximum length of the output string with the decimal representation of NUM.
 
-            .DEF B0=R12                 ; Второй операнд любой арифметической операции: FDIV32,FMUL32,FADD32,FSUB32.
+            .DEF B0=R12                 ; Second operand of any arithmetic operation: FDIV32,FMUL32,FADD32,FSUB32.
             .DEF B1=R13                 ;
             .DEF B2=R14                 ;
             .DEF B3=R15                 ;
 
-            .DEF TMP0=R22               ; Может быть использован для временного хранения float32.
+            .DEF TMP0=R22               ; Can be used for temporary storage of a float32 value.
             .DEF TMP1=R23               ;
             .DEF TMP2=R24               ;
             .DEF TMP3=R25               ;
             
-FTOAE:      PUSH MAXLEN                 ; Бэкапим MAXLEN.
+FTOAE:      PUSH MAXLEN                 ; Back up MAXLEN.
 
             CLR EXP                     ; EXP=0.
 
-            PUSH A3                     ; Бэкапим старшие два байта NUM.
+            PUSH A3                     ; Back up the two most significant bytes of NUM.
             PUSH A2                     ;
-            ROL A2                      ; Распаковываем экспоненту NUM.
+            ROL A2                      ; Unpack the exponent of NUM.
             ROL A3                      ;
             LDI R16,-127                ;
             ADD R16,A3                  ;
-            POP A2                      ; Восстанавливаем старшие два байта NUM вместо тех, которые "пострадали" при распаковке экспоненты.
-            POP A3                      ; Экспонента в коде со смещением лежит в [1,126] или поле экспоненты содержит нулевое значение?
-            BRMI NORMLFT                ; Да, значит истинная экспонента лежит в [-126,-1], из чего следует, что NUM<1 и INT(NUM)=0; либо NUM=0. В обоих случаях переходим к нормализации влево.
+            POP A2                      ; Restore the higher two bytes of NUM, replacing those that were modified during the unpacking of the exponent.
+            POP A3                      ; Is the biased exponent in [1,126] or exponent field is zero?
+            BRMI NORMLFT                ; Yes, this means either the true exponent is in the range [-126,-1], which means NUM<1 and INT(NUM)=0, or NUM is zero. In both cases proceed to normalizing to the left.
 
-NORMRGHT:   PUSH A3                     ; Нет, NUM>=1, значит NUM либо уже нормализован, либо денормализован влево (тогда нормализуем вправо).
-            PUSH A2                     ; Бэкапим текущее значение NUM. NOTE: Возможно, что оно уже нормализовано.
+NORMRGHT:   PUSH A3                     ; No, NUM>=1, this means NUM is either already normalized, or denormalized to the left (in that case, normalize to the right).
+            PUSH A2                     ; Backup the current value of NUM. NOTE: It may already be normalized.
             PUSH A1                     ;
             PUSH A0                     ;
 
@@ -1317,25 +1317,25 @@ NORMRGHT:   PUSH A3                     ; Нет, NUM>=1, значит NUM ли�
             CALL FDIV32                 ; A=NUM=FDIV32(NUM,10.0f).
             POP EXP                     ;
 
-            PUSH A3                     ; Бэкапим старшие два байта NUM.
+            PUSH A3                     ; Back up the higher two bytes of NUM.
             PUSH A2                     ;
-            ROL A2                      ; Распаковываем экспоненту NUM.
+            ROL A2                      ; Unpack the exponent of NUM.
             ROL A3                      ;
             LDI R16,-127                ;
             ADD R16,A3                  ;
-            POP A2                      ; Восстанавливаем старший байт NUM, искаженный извлечением экспоненты.
-            POP A3                      ; Экспонента в коде со смещением лежит в [1,126]?
-            BRMI RESTNORM               ; Да, значит истинная экспонента лежит в [-126,-1], а это значит, что NUM<1 и предыдущее значение до деления на 10 уже было нормализованным.
+            POP A2                      ; Restore the higher byte of NUM, modified by the extraction of the exponent.
+            POP A3                      ; Is the biased exponent in the range [1,126]?
+            BRMI RESTNORM               ; Yes, this means the true exponent is in [-126,-1], implying that NUM<1, and the previous value before division by 10 was already normalized.
             
-            INC EXP                     ; Нет, NUM>=1, значит предыдущее значение не было нормализованным. Запоминаем очередное понижение десятичного порядка NUM.
+            INC EXP                     ; No, NUM>=1, so the previous value was not normalized. Remember the decrease in the decimal order of NUM.
 
-            POP R16                     ; Удаляем предыдущее значение NUM.
+            POP R16                     ; Remove the previous value of NUM.
             POP R16                     ;
             POP R16                     ;
             POP R16                     ;
             RJMP NORMRGHT               ;
 
-RESTNORM:   POP A0                      ; Восстанавливаем последнее значение NUM, которое уже нормализовано.
+RESTNORM:   POP A0                      ; Restore the last value of NUM, which is already normalized.
             POP A1                      ;
             POP A2                      ;
             POP A3                      ;
@@ -1346,7 +1346,7 @@ NORMLFT:    CLR R16                     ;
             OR R16,A1                   ;
             OR R16,A2                   ;
             OR R16,A3                   ; NUM=0.0f?
-            BREQ CONVMANT               ; Да, NUM=0.0f - FTOAN обработает ноль корректно и вернет строку с символом нуля. EXP тоже остаётся равен нулю. 
+            BREQ CONVMANT               ; Yes, NUM=0.0f - FTOAN will handle zero correctly and return a string with the zero character. EXP also remains zero.
 
             LDI R16,TEN0                ; B=10.0f.
             LDI R17,TEN1                ;
@@ -1362,200 +1362,200 @@ NORMLFT:    CLR R16                     ;
             POP EXP                     ;
             INC EXP                     ; EXP++.
 
-            PUSH A3                     ; Бэкапим старшие два байта NUM.
+            PUSH A3                     ; Back up the higher two bytes of NUM.
             PUSH A2                     ;
-            ROL A2                      ; Распаковываем экспоненту NUM.
+            ROL A2                      ; Unpack the exponent of NUM.
             ROL A3                      ;
             LDI R16,-127                ;
             ADD R16,A3                  ;
-            POP A2                      ; Восстанавливаем NUM.
+            POP A2                      ; Restore NUM.
             POP A3                      ; NUM>=1?
-            BRMI NORMLFT                ; Нет, продолжаем нормализацию.
+            BRMI NORMLFT                ; No, continue normalization.
 
-            LDI R16,0b10000000          ; EXP=-EXP. Представляем отрицательную экспоненту в прямом коде.
+            LDI R16,0b10000000          ; EXP=-EXP. Represent the negative exponent in sign-magnitude format.
             OR EXP,R16                  ;
 
             ;
-            ; Конвертация десятичной мантиссы в строку.
+            ; Convert the decimal mantissa to a string.
             ;
-            ; NOTE: Мы нормализовали NUM (если он не был нормализован изначально) и это значение представляет теперь
-            ; мантиссу в десятичной экспоненциальной записи.
-CONVMANT:   POP MAXLEN                  ; Извлекаем аргумент MAXLEN.
+            ; NOTE: We normalized NUM (if it wasn't initially normalized), and this value now represents
+            ; the mantissa in decimal exponential notation.
+CONVMANT:   POP MAXLEN                  ; Restore MAXLEN.
 
             AND EXP,EXP                 ; EXP=0?
-            BREQ CHKSGN                 ; Да, истинное значение NUM изначально нормализовано, экспоненциальная форма не требуется.
+            BREQ CHKSGN                 ; Yes, the true value of NUM is already normalized; exponential form is not required.
 
-            LDI R16,-4                  ; Нет, резервируем в строке 4 символа под экспоненту: E{+|-}00.
+            LDI R16,-4                  ; No, reserve 4 characters in the string for the exponent: E{+|-}00.
             ADD MAXLEN,R16              ; MAXLEN=MAXLEN-4.
 
-CHKSGN:     LDI R16,0b10000000          ; Маска знака.
+CHKSGN:     LDI R16,0b10000000          ; Sign mask.
             AND R16,A3                  ; NUM<0?
-            BRNE NUMNEG                 ; Да, резервируем в выходной строке один символ под '-'.
+            BRNE NUMNEG                 ; Yes, reserve one character in the output string for '-'.
             
-            LDI R16,-2                  ; Нет, резервируем только два места под цифру целой части и точку.
+            LDI R16,-2                  ; No, reserve only two characters for the integer digit and the decimal point.
             ADD MAXLEN,R16              ; MAXLEN=MAXLEN-2.
             RJMP CALLFTOAN              ;
 
-NUMNEG:     LDI R16,-2-1                ; Два места под цифру целой части и точку и еще одно место - под символ минуса '-'.
+NUMNEG:     LDI R16,-2-1                ; Reserve two characters for the integer digit and the decimal point, plus one more character for the '-' sign.
             ADD MAXLEN,R16              ; MAXLEN=(MAXLEN-2)-1.
 
 CALLFTOAN:  PUSH EXP                    ;
-            CALL FTOAN                  ; STR=FTOAN(NUM,MAXLEN). MAXLEN после вычислений фактически содержит PRECISION,
-            POP EXP                     ; который гарантирует, что не будет превышения исходного значения MAXLEN.
+            CALL FTOAN                  ; STR=FTOAN(NUM,MAXLEN). After calculations, MAXLEN effectively holds PRECISION,
+            POP EXP                     ; which ensures that the initial MAXLEN value will not be exceeded.
 
             AND EXP,EXP                 ; EXP=0?
-            BREQ EXITFTOAE              ; Да, выходим.
+            BREQ EXITFTOAE              ; Yes, exit.
 
-            LDI R16,'E'                 ; Нет, формируем экспоненциальную запись.
+            LDI R16,'E'                 ; No, append the exponent after the string.
             ST X+,R16                   ; STR+='E'.
 
-            ROL EXP                     ; EXP<0? NOTE: Отрицательная экспонента представлена в прямом коде.
-            BRCC SETPLUS                ; Нет, EXP>0, устанавливаем знак '+'.
-            LDI R16,'-'                 ; Да, устанавливаем знак '-'.
+            ROL EXP                     ; EXP<0? NOTE: The negative exponent is represented in sign-magnitude format.
+            BRCC SETPLUS                ; No, EXP>0, set '+'.
+            LDI R16,'-'                 ; Yes, set '-'.
             ST X+,R16                   ;
             RJMP EXPTOSTR               ;
 SETPLUS:    LDI R16,'+'                 ;
             ST X+,R16                   ;
 
             ;
-            ; Конвертация экспоненты в строку.
+            ; Convert the exponent to a string.
             ;
-            ; Если экспонента не равна нулю, то модуль экспоненты лежит в [1,38].
-            ; Это значит, что неполное частное от деления на 10 не превышает 3 (0b00000011).
-            ; А остаток по определению меньше делителя и лежит в [0,9].
-            ; Таким образом, после деления экспоненты на 10 неполное частное содержит старшую десятичную цифру экспоненты,
-            ; а остаток - младшую.
+            ; If the exponent is non-zero, then the absolute value of the exponent lies in the range [1,38].
+            ; This means that the incomplete quotient from division by 10 does not exceed 3 (0b00000011).
+            ; The remainder, by definition, is less than the divisor and lies in the range [0,9].
+            ; Thus, after dividing the exponent by 10, the quotient contains the most significant decimal digit of the exponent,
+            ; and the remainder contains the least significant decimal digit.
 EXPTOSTR:   CLC                         ; EXP=|EXP|.
             ROR EXP                     ;
 
-            LDI R18,2                   ; Поскольку частное не больше 3, то количество проверяемых двоичных цифр равно двум.
+            LDI R18,2                   ; Since the quotient does not exceed 3, the number of binary digits to check is two.
 
-            CLR R17                     ; Здесь формируются цифры частного.
+            CLR R17                     ; The digits of the quotient are formed here.
 
-            LDI R16,-(10*2)             ; Q[i]=2=0b00000010. Сразу формируем в доп. коде.
+            LDI R16,-(10*2)             ; Q[i]=2=0b00000010. Form immediately in two's complement.
 REPEAT:     ADD EXP,R16                 ; EXP-(10*Q[i])>=0?
-            BRPL SET1                   ; Да, цифра частного Q[i] равна единице.
-            RJMP SET0                   ; Нет, цифра Q[i] равна нулю.
+            BRPL SET1                   ; Yes, the quotient digit Q[i] equals one.
+            RJMP SET0                   ; No, the digit Q[i] equals zero.
 
-SET1:       SEC                         ; Устанавливаем текущий разряд частного в 1.
+SET1:       SEC                         ; Set the current digit of the quotient to 1.
             ROL R17                     ;
 
-            DEC R18                     ; Определены обе двоичные цифры частного?
-            BREQ SETDECDIG              ; Да, частное содержит число, соответствующее старшей десятичной цифре экспоненты, а EXP - остаток, т.е. число, соответствующее младшей цифре экспоненты.
-            LDI R16,-(10*1)             ; Нет, определяем младшую цифру частного.
+            DEC R18                     ; Are both binary digits of the quotient determined?
+            BREQ SETDECDIG              ; Yes, the quotient contains the value corresponding to the most significant decimal digit of the exponent, while EXP holds the remainder, corresponding to the least significant digit.
+            LDI R16,-(10*1)             ; No, determine the least significant binary digit of the quotient.
             RJMP REPEAT                 ; Q[i]=1=0b00000001.
 
-SET0:       CLC                         ; Устанавливаем текущий разряд частного в 0.
+SET0:       CLC                         ; Set the current bit of the quotient to 0.
             ROL R17                     ;
 
-            DEC R18                     ; Определены обе двоичные цифры частного?
-            BREQ RESTREM                ; Да, частное содержит число, соответствующее старшей десятичной цифре экспоненты, а EXP после восстановления остатка - младшей.
-            LDI R16,10                  ; Нет, определяем младшую цифру частного.
-            RJMP REPEAT                 ; Новый остаток вычисляется без восстановления: (EXP+20)-10=EXP+10.
+            DEC R18                     ; Are both binary digits of the quotient determined?
+            BREQ RESTREM                ; Yes, the quotient contains the value corresponding to the most significant decimal digit of the exponent, while EXP will hold the remainder (after restoring), corresponding to the least significant digit.
+            LDI R16,10                  ; No, determine the least significant binary digit of the quotient.
+            RJMP REPEAT                 ; The new remainder is calculated without restoring: (EXP+20)-10=EXP+10.
             
-RESTREM:    LDI R16,10                  ; Восстанавливаем последний неотрицательный остаток.
+RESTREM:    LDI R16,10                  ; Restore the last non-negative remainder.
             ADD EXP,R16                 ;
 
 SETDECDIG:  LDI R16,0x30                ; R16='0'.
 
-            OR R17,R16                  ; Формируем ASCII-код старшей десятичной цифры экспоненты.
-            ST X+,R17                   ; Добавляем в строку.
+            OR R17,R16                  ; Form the ASCII code of the most significant decimal digit of the exponent.
+            ST X+,R17                   ; Append to the string.
             
-            OR EXP,R16                  ; Формируем ASCII-код младшей десятичной цифры экспоненты.
-            ST X+,EXP                   ; Добавляем в строку.
+            OR EXP,R16                  ; Form the ASCII code of the least significant decimal digit of the exponent.
+            ST X+,EXP                   ; Append to the string.
 
             LDI R16,0                   ; R16='\0'.
-            ST X,R16                    ; Добавляем конец строки.
+            ST X,R16                    ; Append the end of the line.
 
 EXITFTOAE:  RET
 
 ;
-; Преобразует ASCII-строку с десятичной дробью в бинарный float.
+; Converts an ASCII string containing a decimal fraction into a binary float.
 ;
-; В основе лежит наивный алгоритм из [Kernighan & Ritchie, The C Programming Language],
-; который в общем случае даёт не лучшее двоичное приближение к входному десятичному числу.
+; Based on the naive algorithm from [Kernighan & Ritchie, The C Programming Language],
+; which generally does not provide the best binary approximation for the input decimal number.
 ;
-; Основная идея та же, что и для FTOA - мы просто игнорируем тот факт, что десятичное представление
-; исходной двоичной дроби искажается при её масштабировании и умножаем двоичную дробь на 10 так,
-; словно мы непосредственно умножаем её десятичное представление, игнорируя искажения некоторых разрядов
-; нового десятичного представления отмасштабированной двоичной дроби.
+; The main idea is the same as for FTOA - we simply ignore the fact that the decimal representation
+; of the initial binary fraction gets distorted during scaling and multiply the binary fraction by 10
+; as if we were directly multiplying its decimal representation, disregarding distortions in certain
+; digits of the new decimal representation of the scaled binary fraction.
 ;
-; NOTE: Поскольку в текущей реализации нет поддержки отрицательного нуля, то при получении на вход
-; строки "-0" происходит формирование положительного нуля.
+; NOTE: Since the current implementation does not support negative zero,
+; an input string "-0" results in positive zero.
 ;
-; NOTE: Исключение при делении на ноль здесь невозможно.
-; А переполнение может произойти только в следующих случаях:
-;   - Переполнение NUM в FMUL32 при обработке целой части.
-;   - Переполнение NUM в FMUL32 при обработке дробной части.
-;   - Переполнение OVERSCALE в FMUL32 при обработке дробной части.
+; NOTE: Division by zero exception is not possible here.
+; Overflow can only occur in the following cases:
+;   - Overflow of NUM in FMUL32 during the processing of the integer part.
+;   - Overflow of NUM in FMUL32 during the processing of the fractional part.
+;   - Overflow of OVERSCALE in FMUL32 during the processing of the fractional part.
 ; 
-; Переполнение NUM в FADD32 при обработке целой части не может произойти.
+; Overflow of NUM in FADD32 during the processing of the integer part cannot occur.
 ;
-; Доказательство:
-; Допустим, что это не так, тогда существует такое целое число, которое не даёт переполнения
-; при масштабировании, когда мы извлекаем последний разряд - разряд единиц, но при этом даёт переполнение
-; при прибавлении этого разряда к отмасштабированному NUM.
+; Proof:
+; Assume this is not the case. Then there exists an integer that does not cause overflow
+; during scaling when extracting the last digit (the ones place), but causes overflow
+; when adding this digit to the scaled NUM.
 ;
-; Еще заметим, что максимальный порядок входной числовой строки - 10^38.
-; То есть, любые числа, количество цифр в записи которых превышает 39, будут давать переполнение,
-; поэтому они сразу исключаются из рассмотрения.
+; Note also that the maximum order of the input numeric string is 10^38.
+; That is, any numbers with more than 39 digits in their representation will cause overflow
+; and are therefore immediately excluded from consideration.
 ; 
-; Возьмем теперь значение 340282430000000000000000000000000000000, оно даёт переполнение в FMUL32
-; уже при анализе самого младшего разряда. Следовательно, интересующее нас значение (если оно существует)
-; меньше данного.
-; Возьмем теперь значение на единицу меньше - 340282429999999999999999999999999999999.
-; Оно не дает переполнения в FMUL32, но оно не даёт переполнения и в FADD32, когда мы прибавляем цифру из
-; разряда единиц после масштабирования NUM (и прибавляем мы маскимальное значение - 9).
-; Следовательно, если значение, которое даёт переполнение только в FADD32, существует, то
-; оно явно должно быть меньше первого (чтобы не давать переполнения в FMUL32), но при этом
-; оно должно быть больше второго (чтобы давать переполнение при прибавлении числа из разряда единиц).
-; Но между 340282429999999999999999999999999999999 и 340282430000000000000000000000000000000
-; не существует других целых чисел, т.е. такого значения попросту не существует.
+; Now consider the value 340282430000000000000000000000000000000, which causes overflow in FMUL32
+; even during the analysis of the least significant digit. Therefore, the value we are interested in (if it exists)
+; is less than this one.
+; Now consider the value one less than the previous one - 340282429999999999999999999999999999999.
+; It does not cause overflow in FMUL32, nor does it cause overflow in FADD32, when adding the digit
+; from the units place after scaling NUM (and we add the maximum value - 9).
+; Therefore, if a value that causes overflow only in FADD32 exists,
+; it must be less than the first value (to avoid overflow in FMUL32),
+; yet greater than the second value (to cause overflow when adding the digit from the units place).
+; However, there are no other integers between 340282429999999999999999999999999999999 and 340282430000000000000000000000000000000,
+; meaning such a value simply does not exist (for any fractional number between the mentioned ones we get overflow in FMUL32).
 ; 
-; Переполнение NUM в FADD32 при обработке дробной части не может произойти по тем же соображениям:
-; достаточно заметить, что количество цифр в дробной части не должно превышать 38, чтобы
-; не было переполнения OVERSCALE и по аналогии начать рассмотрение с дроби 3.40282430000000000000000000000000000000.
-; Более детальные рассуждения относительно граничных входных значений десятичных числовых строк можно найти
-; в основной доке.
+; Overflow of NUM in FADD32 during fractional part processing cannot occur for the same reason.
+; First, note that the number of digits in the fractional part must not exceed 38 to avoid OVERSCALE overflow and
+; then start by considering the fraction 3.40282430000000000000000000000000000000.
+; More detailed reasoning about the boundary input values of decimal numeric strings
+; can be found in the main documentation.
 ;
-; Вход:
-;   - XH:XL: Указатель STR на ASCII-строку с нулём в конце.
+; Input:
+;   - XH:XL: Pointer STR to an ASCII string with a null terminator.
 ; 
-; Выход:
-;   - R11, R10, R9, R8: Число NUM в формате плавающей точки.
+; Output:
+;   - R11, R10, R9, R8: Floating-point number NUM.
             .EQU ONE0=0x00              ; 1.0f.
             .EQU ONE1=0x00              ;
             .EQU ONE2=0x80              ;
             .EQU ONE3=0x3F              ;
 
-            .DEF A0=R8                  ; Первый операнд любой арифметической операции: FDIV32,FMUL32,FADD32,FSUB32.
+            .DEF A0=R8                  ; The first operand of any arithmetic operation: FDIV32,FMUL32,FADD32,FSUB32.
             .DEF A1=R9                  ;
             .DEF A2=R10                 ;
             .DEF A3=R11                 ;
 
-            .DEF B0=R12                 ; Второй операнд любой арифметической операции: FDIV32,FMUL32,FADD32,FSUB32.
+            .DEF B0=R12                 ; The second operand of any arithmetic operation: FDIV32,FMUL32,FADD32,FSUB32.
             .DEF B1=R13                 ;
             .DEF B2=R14                 ;
             .DEF B3=R15                 ;
 
-            .DEF TMP0=R22               ; Может быть использован для временного хранения float32.
+            .DEF TMP0=R22               ; Can be used for temporary storage of a float32.
             .DEF TMP1=R23               ;
             .DEF TMP2=R24               ;
             .DEF TMP3=R25               ;
 
-ATOF:       PUSH ZL                     ; Бэкапим адрес обработчика исключений во внешнем коде,
-            PUSH ZH                     ; поскольку сначала мы перехватываем исключение здесь, внутри ATOF.
+ATOF:       PUSH ZL                     ; Back up the exception handler address in external code,
+            PUSH ZH                     ; as we first intercept the exception here within ATOF.
 
-            LDI ZL,LOW(FLOATERR0)       ; Устанавливаем обработчик исключений для первого вызова FMUL32.
+            LDI ZL,LOW(FLOATERR0)       ; Set the exception handler for the first call of FMUL32.
             LDI ZH,HIGH(FLOATERR0)      ;
             RJMP INITNUM                ;
-FLOATERR0:  POP R16                     ; Выбрасываем из стека адрес возврата.
+FLOATERR0:  POP R16                     ; Discard the return address.
             POP R16                     ;
-            POP R16                     ; Выбрасываем DIGIT.
-            POP R16                     ; Выбрасываем SIGN.
-            POP ZH                      ; Восстанавливаем адрес обработчика исключений во внешнем коде.
-            POP ZL                      ; В стеке остался только адрес возврата после вызова ATOF во внешнем коде.
-            IJMP                        ; Передаём управление во внешний обработчик исключений.
+            POP R16                     ; Discard DIGIT.
+            POP R16                     ; Discard SIGN.
+            POP ZH                      ; Restore the exception handler address in the external code.
+            POP ZL                      ; The stack now contains only the return address after the ATOF call in the external code.
+            IJMP                        ; Pass control to the external exception handler.
 
 INITNUM:    CLR A0                      ; A=NUM=0.0f.
             CLR A1                      ;
@@ -1563,28 +1563,28 @@ INITNUM:    CLR A0                      ; A=NUM=0.0f.
             CLR A3                      ;
 
             ;
-            ; Определение знака числа.
+            ; Determine the sign of the number.
             LD R16,X                    ;
             LDI R17,'-'                 ;
-            EOR R16,R17                 ; Первый символ числовой строки - минус?
-            BREQ MINUS                  ; Да, формируем отрицательный знак результата и пропускаем первый символ.
-            CLR R16                     ; Нет, знак NUM будет положительным - MSB старшего байта NUM будет нулевым.
+            EOR R16,R17                 ; Is the first character of the numeric string a minus sign?
+            BREQ MINUS                  ; Yes, form the negative sign for the result and skip the first character.
+            CLR R16                     ; No, the sign of NUM will be positive - the MSB of the higher byte of NUM will be zero.
             PUSH R16                    ;
             RJMP GETINT1                ;
 
-MINUS:      LD R16,X+                   ; Пропускаем знак минуса и смещаемся к следующему символу.
-            LDI R16,0b10000000          ; MSB старшего байта NUM будет содержать единицу.
-            PUSH R16                    ; Сохраняем SIGN в стеке до конца вычислений.
+MINUS:      LD R16,X+                   ; Skip the minus sign and move to the next character.
+            LDI R16,0b10000000          ; The MSB of the higher byte of NUM will contain 1.
+            PUSH R16                    ; Save SIGN to the stack until the end of calculations.
 
             ;
-            ; Обработка целой части.
+            ; Handling the integer part.
 GETINT1:    LD R16,X+                   ; R16=DIGIT=*STR++.
-            AND R16,R16                 ; Прочитали конец строки?
-            BREQ EXITATOF               ; Да, выходим.
-            LDI R17,0x2E                ; Нет.
-            EOR R17,R16                 ; Прочитали точку?
-            BREQ GETFRAC1               ; Да, переходим к дробной части.
-                                        ; Нет, продолжаем анализировать целую часть.
+            AND R16,R16                 ; End of string reached?
+            BREQ EXITATOF               ; Yes, exit.
+            LDI R17,0x2E                ; No.
+            EOR R17,R16                 ; Decimal point reached?
+            BREQ GETFRAC1               ; Yes, proceed to the fractional part.
+                                        ; No, continue handling the integer part.
             LDI R17,TEN0                ; B=10.0f
             LDI R18,TEN1                ;
             LDI R19,TEN2                ;
@@ -1594,16 +1594,16 @@ GETINT1:    LD R16,X+                   ; R16=DIGIT=*STR++.
             MOV B2,R19                  ;
             MOV B3,R20                  ;
 
-            PUSH R16                    ; Если это не первая цифра, значит порядок NUM выше, чем мы предположили.
+            PUSH R16                    ; If this is not the first digit, the order of NUM is higher than initially assumed.
             CALL FMUL32                 ; A=NUM=FMUL32(NUM,10.0f).
             POP R16                     ;
 
-            PUSH A3                     ; Бэкапим NUM.
+            PUSH A3                     ; Backup NUM.
             PUSH A2                     ;
             PUSH A1                     ;
             PUSH A0                     ;
 
-            LDI R17,0x0F                ; Извлекаем из ASCII-кода цифры обозначаемое ею число.
+            LDI R17,0x0F                ; Extract the numeric value represented by the ASCII code of the digit.
             AND R16,R17                 ; R16=DIGIT-0x30.
             MOV A0,R16                  ; R8=DIGIT.
             CALL ITOF                   ; A=FDIGIT=FLOAT(DIGIT).
@@ -1617,39 +1617,39 @@ GETINT1:    LD R16,X+                   ; R16=DIGIT=*STR++.
             POP A2                      ;
             POP A3                      ;
 
-                                        ; Предполагаем, что прочитанная цифра последняя в целой части и т.о. представляет разряд единиц.
+                                        ; Assume the read digit is the last in the integer part and thus represents the units place.
             CALL FADD32                 ; A=NUM=NUM+FDIGIT.
 
             RJMP GETINT1
 
             ;
-            ; Выходим из ATOF.
+            ; Exit ATOF.
 EXITATOF:   CLR R16                     ;
             OR R16,A0                   ;
             OR R16,A1                   ;
             OR R16,A2                   ;
-            OR R16,A3                   ; Ноль?
-            BRNE SETSIGN                ; Нет, устанавливаем знак.
-            POP R16                     ; Да, удаляем знак из стека.
-            POP R16                     ; Удаляем сохраненный адрес обработчика исключений во внешнем коде.
+            OR R16,A3                   ; Zero?
+            BRNE SETSIGN                ; No, set the sign.
+            POP R16                     ; Yes, discard the sign from the stack.
+            POP R16                     ; Discard the backed-up external exception handler from the stack.
             POP R16                     ;
-            RET                         ; Возвращаем положительный ноль.
+            RET                         ; Return positive zero.
 
 SETSIGN:    POP R16                     ; R16=SIGN.
-            EOR A3,R16                  ; Устанавливаем знак NUM.
+            EOR A3,R16                  ; Set the sign for NUM.
 
-            POP R16                     ; ATOF отработал без исключений, поэтому адрес обработчика исключений в вызывающем коде
-            POP R16                     ; больше не нужен - удаляем его из стека.
-            RET                         ; В стеке остался только адрес возврата после вызова ATOF.
+            POP R16                     ; ATOF finished without exceptions, so the backed up address of the exception handler in the calling code
+            POP R16                     ; is no longer needed. That's why we remove it from the stack.
+            RET                         ; Only the return address after the ATOF call remains on the stack.
 
             ;
-            ; Обработка дробной части.
+            ; Handling the fractional part.
 DWNSCALE:   POP B0                      ; B=OVERSCALE.
             POP B1                      ;
             POP B2                      ;
             POP B3                      ;
                                         
-                                        ; Восстанавливаем истинный порядок числа NUM после извлечения дробной части.
+                                        ; Restore the true order of the number NUM after extracting the fractional part.
             CALL FDIV32                 ; A=NUM=FDIV32(NUM,OVERSCALE).
 
             RJMP EXITATOF               ;
@@ -1663,25 +1663,25 @@ GETFRAC1:   LDI R16,ONE3                ; OVERSCALE=1.0f.
             PUSH R18                    ;
             PUSH R19                    ;
 
-            LDI ZL,LOW(FLOATERR1)       ; Устанавливаем обработчик исключений для второго вызова FMUL32, который масштабирует NUM.
-            LDI ZH,HIGH(FLOATERR1)      ; Этот же обработчик корректно сработает при переполнении на третьем вызове FMUL32, который увеличивает OVERSCALE.
+            LDI ZL,LOW(FLOATERR1)       ; Set the exception handler for the second FMUL32 call, which scales NUM.
+            LDI ZH,HIGH(FLOATERR1)      ; The same handler will correctly handle overflow during the third FMUL32 call, which increases OVERSCALE.
             RJMP GETFRAC2               ;
-FLOATERR1:  POP R16                     ; Выбрасываем адрес возврата.
+FLOATERR1:  POP R16                     ; Discard the return address.
             POP R16                     ;
-            POP R16                     ; Выбрасываем DIGIT.
-            POP R16                     ; Выбрасываем 4 байта OVERSCALE (в случае переполнения при масштабировании NUM - второй вызов FMUL32)
-            POP R16                     ; или 4 байта отмасштабированного с избытком NUM (в случае переполнения при масштабировании OVERSCALE - третий вызов FMUL32).
-            POP R16                     ; NOTE: Конечно, можно сразу "спустить" указатель стека в нужное место, а не делать POP для каждого элемента.
-            POP R16                     ; Но текущий способ выбран для простоты и наглядности.
-            POP R16                     ; Выбрасываем SIGN.
-            POP ZH                      ; Восстанавливаем адрес обработчика исключений во внешнем коде.
-            POP ZL                      ; В стеке остался только адрес возврата после вызова ATOF во внешнем коде.
-            IJMP                        ; Передаём управление во внешний обработчик исключений.
+            POP R16                     ; Discard DIGIT.
+            POP R16                     ; Discard 4 bytes of OVERSCALE (in case of overflow during the NUM scaling - the second FMUL32 call)
+            POP R16                     ; or discard 4 bytes of excessively scaled NUM (in case of overflow during OVERSCALE scaling - the third FMUL32 call).
+            POP R16                     ; NOTE: Of course, we could adjust the stack pointer directly to the desired position instead of performing a POP for each element.
+            POP R16                     ; But the main goal here is explicitness.
+            POP R16                     ; Discard SIGN.
+            POP ZH                      ; Restore the address of the exception handler in the external code.
+            POP ZL                      ; Only the return address after the ATOF call in the external code remains on the stack.
+            IJMP                        ; Pass control to the external exception handler.
 
 GETFRAC2:   LD R16,X+                   ; R16=DIGIT=*STR++.
-            AND R16,R16                 ; Прочитали конец строки?
-            BREQ DWNSCALE               ; Да, восстанавливаем истинный порядок NUM.
-                                        ; Нет, продолжаем обработку дробных разрядов.
+            AND R16,R16                 ; End of string reached?
+            BREQ DWNSCALE               ; Yes, restore the true order of NUM.
+                                        ; No, continue extracting fractional digits.
             LDI R17,TEN0                ; B=10.0f.
             LDI R18,TEN1                ;
             LDI R19,TEN2                ;
@@ -1691,7 +1691,7 @@ GETFRAC2:   LD R16,X+                   ; R16=DIGIT=*STR++.
             MOV B2,R19                  ;
             MOV B3,R20                  ;
 
-            PUSH R16                    ; Завышаем порядок NUM, чтобы текущая цифра представляла разряд единиц.
+            PUSH R16                    ; Increase the order of NUM so that the current digit represents the units place.
             CALL FMUL32                 ; A=NUM=FMUL32(NUM,10.0f).
             POP R16                     ;
 
@@ -1700,12 +1700,12 @@ GETFRAC2:   LD R16,X+                   ; R16=DIGIT=*STR++.
             POP TMP2                    ;
             POP TMP3                    ;
 
-            PUSH A3                     ; Бэкапим NUM.
+            PUSH A3                     ; Backup NUM.
             PUSH A2                     ;
             PUSH A1                     ;
             PUSH A0                     ;
 
-            PUSH R16                    ; Бэкапим DIGIT.
+            PUSH R16                    ; Backup DIGIT.
 
             MOV A0,TMP0                 ; A=TMP=OVERSCALE.
             MOV A1,TMP1                 ;
@@ -1721,7 +1721,7 @@ GETFRAC2:   LD R16,X+                   ; R16=DIGIT=*STR++.
             MOV B2,R18                  ;
             MOV B3,R19                  ; 
 
-                                        ; Запоминаем степень завышения истинного порядка NUM.
+                                        ; Keep track of how much the true order of NUM is exceeded.
             CALL FMUL32                 ; A=OVERSCALE=FMUL32(OVERSCALE,10.0f).
             MOV TMP0,A0                 ; TMP=A=OVERSCALE.
             MOV TMP1,A1                 ;
@@ -1735,17 +1735,17 @@ GETFRAC2:   LD R16,X+                   ; R16=DIGIT=*STR++.
             POP A2                      ;
             POP A3                      ;
 
-            PUSH TMP3                   ; Бэкапим OVERSCALE.
+            PUSH TMP3                   ; Backup OVERSCALE.
             PUSH TMP2                   ;
             PUSH TMP1                   ;
             PUSH TMP0                   ;
 
-            PUSH A3                     ; Бэкапим NUM.
+            PUSH A3                     ; Backup NUM.
             PUSH A2                     ;
             PUSH A1                     ;
             PUSH A0                     ;
 
-            LDI R17,0x0F                ; Извлекаем из ASCII-кода цифры обозначаемое ею число.
+            LDI R17,0x0F                ; Extract the numeric value represented by the ASCII code of the digit.
             AND R16,R17                 ; R16=DIGIT-0x30.
             MOV A0,R16                  ; R8=DIGIT.
             CALL ITOF                   ; A=FDIGIT=FLOAT(DIGIT).
