@@ -78,7 +78,7 @@ KEYPAD:     IN KEY,PIND                     ; Raw key code is in the upper nibbl
 .ENDIF
 
             ;
-            ; S0 - Initial state before entering the first or second operand.
+            ; S0: Initial state before entering the first or second operand.
             ;
             ; Only numeric keys and minus are allowed.
 S0:         LDI R16,'C'                     ;
@@ -154,7 +154,7 @@ S0END:      PUSH R16                        ; Save the new state.
 .ENDIF
 
             ;
-            ; S1 - Intermediate state after pressing zero.
+            ; S1: Intermediate state after pressing zero.
             ;
             ; Only a decimal point or operator keys are allowed.
 S1:         LDI R16,'C'                     ;
@@ -222,7 +222,7 @@ S1END:      PUSH R16                        ;
 .ENDIF
 
             ;
-            ; S2 - Intermediate state after pressing minus.
+            ; S2: Intermediate state after pressing minus.
             ;
             ; Only numeric keys are allowed.
 S2:         LDI R16,'C'                     ;
@@ -643,7 +643,7 @@ STAY:       LDI R16,LOW(SHOWRES)            ;
             RETI                            ;
 
             ;
-            ; S3 - Intermediate state after pressing the decimal point.
+            ; S3: Intermediate state after pressing the decimal point.
             ;
             ; Only numeric keys are allowed.
 S3:         LDI R16,'C'                     ;
@@ -696,7 +696,7 @@ S3END:      PUSH R16                        ;
 .ENDIF
 
             ;
-            ; S4 - Entering digits of the integer part.
+            ; S4: Input of the integer part.
             ;
             ; In this state, all keys are allowed, so there is no default behavior branch.
             ; If the decimal point key is pressed and only one space is available (just enough for the point),
@@ -787,9 +787,9 @@ S4END:      PUSH R16                        ;
 .ENDIF
 
             ;
-            ; Ввод цифр дробной части.
+            ; S5: Input of the fractional part.
             ;
-            ; Разрешены все клавиши, кроме десятичной точки.
+            ; All keys are allowed except the decimal point.
 S5:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='C'?
             BREQ S5RESETIN                  ;
@@ -800,13 +800,13 @@ S5:         LDI R16,'C'                     ;
             EOR R16,R17                     ; KEY=['0','9']?
             BREQ S5DIG09                    ;
 
-            LDI R16,'.'                     ; Точка не разрешена в этом состоянии.
+            LDI R16,'.'                     ; Decimal point is not allowed in this state.
             EOR R16,KEY                     ; KEY='.'?
-            BREQ S5SKIP                     ; Да, игнорируем нажатие клавиши.
+            BREQ S5SKIP                     ; Yes, ignore the key press.
 
-            LDI R16,0xF0                    ; Выше мы сначала исключили точку,
-            AND R16,KEY                     ; поскольку она тоже имеет 0x20 в ASCII в старшем байте - 
-            LDI R17,0x20                    ; теперь проверка арифметических операторов по 0x20 однозначна.
+            LDI R16,0xF0                    ; The decimal point was excluded earlier
+            AND R16,KEY                     ; because it also has 0x20 in the high nibble of ASCII -
+            LDI R17,0x20                    ; now checking arithmetic operators using 0x20 is unambiguous.
             EOR R16,R17                     ; KEY=['+','-','/']?
             BREQ S5OPERATOR                 ;
             LDI R16,'x'                     ;
@@ -821,17 +821,17 @@ S5RESETIN:  JMP RESETINPUT                  ;
 
 S5DIG09:    MOV R16,S                       ;
             EOR R16,LCDLIM                  ; S<LCDLIM?
-            BREQ S5SKIP                     ; Нет, больше цифр ввести нельзя, игнорируем ввод.
-            LDI R16,LOW(S5)                 ; Да, отображаем цифру и остаемся в текущем состоянии,
-            LDI R17,HIGH(S5)                ; ожидая следующего нажатия.
+            BREQ S5SKIP                     ; No, no more digits can be entered; ignore input.
+            LDI R16,LOW(S5)                 ; Yes, display the digit and stay in the current state,
+            LDI R17,HIGH(S5)                ; waiting for the next key press.
             RJMP S5PRNTKEY                  ;
 
 S5OPERATOR: LDI R16,2                       ;
-            EOR R16,P                       ; Завершен ввод второго операнда?
-            BREQ S5OPERAND2                 ; Да, переходим к конвертации в float32 и вычислению.
-            RJMP OPERAND1                   ; Нет, введен первый операнд, конвертируем его в float.
+            EOR R16,P                       ; Has the second operand input finished?
+            BREQ S5OPERAND2                 ; Yes, proceed to convert to float and calculate.
+            RJMP OPERAND1                   ; No, the first operand was entered; convert it to float.
 
-S5OPERAND2: JMP OPERAND2                    ; Дальний прыжок.
+S5OPERAND2: JMP OPERAND2                    ; Long jump.
 
 S5PRNTKEY:  ST X+,KEY                       ;
             INC S                           ;
@@ -840,7 +840,7 @@ S5PRNTKEY:  ST X+,KEY                       ;
             PUSH S                          ;
             PUSH R16                        ;
             PUSH R17                        ;
-            MOV CHAR,KEY                    ; Выводим нажатую клавишу на LCD.
+            MOV CHAR,KEY                    ; Display the pressed key on the LCD.
             RCALL PRNTCHR                   ;
             POP R17                         ;
             POP R16                         ;
@@ -848,11 +848,11 @@ S5PRNTKEY:  ST X+,KEY                       ;
 .ENDIF
 
 .IFDEF EMULKEYPD
-S5END:      POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+S5END:      POP ZH                          ; Restore the pointer to the test numeric string.
             POP ZL                          ;
-            PUSH R16                        ; Запоминаем новое состояние.
+            PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore the return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ELSE  
@@ -864,7 +864,7 @@ S5END:      PUSH R16                        ;
 .ENDIF
 
 ;
-; НОВЫЙ СТАРТ КАЛЬКУЛЯТОРА.
+; Fresh start of the calculator.
 RESET:      LDI YL,LOW(SP)                  ;
             LDI YH,HIGH(SP)                 ;
             OUT SPL,YL                      ;
@@ -875,13 +875,13 @@ RESET:      LDI YL,LOW(SP)                  ;
 .ENDIF
 
 ;
-; Эмуляция ввода с клавиатуры для проверки обработчика прерываний по клавиатуре.
+; Emulation of keyboard input for testing the interrupt handler.
 ;
-; Конфигурация порта D - на выход, на время программного тестирования ввода с клавиатуры.
-; Это нужно для выставления данных на порту и программного вызова прерывания прямо из текущего кода.
+; During keyboard input testing, configure Port D as output.
+; This allows setting key code on the port and triggering an interrupt programmatically directly from the current code.
 .IFDEF EMULKEYPD
-            SER R16                         ; Настраиваем порт D на выход,
-            OUT DDRD,R16                    ; чтобы программно выставлять код клавиши и инициировать прерывание по INT0.
+            SER R16                         ; Configure Port D as output,
+            OUT DDRD,R16                    ; to programmatically set the key code and trigger an INT0 interrupt.
             LDI R16,0x00                    ;
             OUT PORTD,R16                   ;
 .ELSE
@@ -889,20 +889,20 @@ RESET:      LDI YL,LOW(SP)                  ;
             OUT DDRD,R16                    ;
 .ENDIF
 
-            LDI R16,(1<<ISC01|1<<ISC00)     ; Разрешаем внешние прерывания
-            STS EICRA,R16                   ; по INT0, по переднему фронту - там сидит клавиатура.
+            LDI R16,(1<<ISC01|1<<ISC00)     ; Enable external interrupts
+            STS EICRA,R16                   ; on INT0, triggered on a rising edge - where the keyboard is connected.
             LDI R16,(1<<INT0)               ;
             OUT EIMSK,R16                   ;
             SEI                             ;
 
-            LDI ZL,LOW(KEYMAPPRG<<1)        ; Читаем таблицу ASCII-кодов клавиш в SRAM.
+            LDI ZL,LOW(KEYMAPPRG<<1)        ; Copy the ASCII key table from program memory to SRAM.
             LDI ZH,HIGH(KEYMAPPRG<<1)       ;
             LDI XL,LOW(KEYMAP)              ;
             LDI XH,HIGH(KEYMAP)             ;
 READ:       LPM R0,Z+                       ;
-            AND R0,R0                       ; Прочитали NUL?
-            BREQ MAIN                       ; Да, все символы считаны в SRAM.
-            ST X+,R0                        ; Нет, записываем символ в SRAM и продолжаем.
+            AND R0,R0                       ; NUL?
+            BREQ MAIN                       ; Yes, all characters are loaded into SRAM.
+            ST X+,R0                        ; No, write the character in SRAM and continue.
             RJMP READ                       ;
 
 ;
@@ -910,34 +910,34 @@ READ:       LPM R0,Z+                       ;
 MAIN:       NOP
             
             ;
-            ; Начальный сброс калькулятора.
-            LDI XL,LOW(NUMSTR)              ; Смещаем указатель NUMSTR в начало строки.
+            ; Initial reset of the calculator.
+            LDI XL,LOW(NUMSTR)              ; Set NUMSTR pointer to the beginning of the string.
             LDI XH,HIGH(NUMSTR)             ;
 
-            LDI R16,0                       ; S=0.
+            LDI R16,0                       ; The number of entered characters S=0.
             MOV S,R16                       ;
 
-            LDI R16,1                       ; P=1.
+            LDI R16,1                       ; Begin input from the first operand P=1.
             MOV P,R16                       ;
 
-            LDI R16,LCDLEN-1                ; Резервируем последний символ первой строки под символ оператора.
+            LDI R16,LCDLEN-1                ; Reserve the last character of the first line for the operator symbol.
             MOV LCDLIM,R16                  ;
 
-            LDI R16,LOW(S0)                 ; Начальное состояние - S0.
+            LDI R16,LOW(S0)                 ; The initial state is S0.
             LDI R17,HIGH(S0)                ;
             PUSH R16                        ;
             PUSH R17                        ;
             
 ;
-; Эмуляция ввода с клавиатуры для проверки обработчика прерываний по клавиатуре.
+; Keyboard input emulation for testing the interrupt handler.
 ;
-; Читаем каждый символ числовой строки из памяти программ,
-; преобразуем его ASCII-код в сырой код энкодера клавиатуры,
-; выставляем код на порту D и устанавливает пин INT0 в единицу,
-; вызывая прерывание по клавиатуре программно.
+; Read each character of the numeric string from program memory,
+; convert its ASCII code to the raw keyboard encoder code,
+; set the code on Port D, and set the INT0 pin to high,
+; triggering a keyboard interrupt programmatically.
 .IFDEF EMULKEYPD
             ;
-            ; Раскомментировать при тестировании ввода второго операнда.
+            ; Uncomment when testing the second operand input.
 ;            LDI R16,2                       ;
 ;            MOV P,R16                       ;
 
@@ -945,54 +945,53 @@ MAIN:       NOP
 ;            MOV LCDLIM,R16                  ;
 
             ;
-            ; Инициализация обратной таблицы клавиш - отображение ASCII-кода клавиши в сырой код энкодера.
+            ; Initialization of the reverse keymap table - mapping ASCII codes to raw encoder codes.
             ;
-            ; ASCII-код используется как младший байт адреса в SRAM, по которому записывается сырой код.
-            ; Читаем числовую строку, преобразуя ASCII-код каждого символа в сырой код клавиши и
-            ; выставляем этот код на порту D, инициируя прерывание по INT0 после каждого прочитанного символа.
-            ; Таким образом программно эмулируется ввод с клавиатуры.
-            LDI R17,0x00                    ; Сырой код клавиши.
-            LDI ZL,LOW(KEYMAPPRG << 1)      ;
-            LDI ZH,HIGH(KEYMAPPRG << 1)     ;
+            ; The ASCII code is used as the lower byte of the SRAM address where the raw code is stored.
+            ; Read the numeric string, convert each ASCII character to a raw key code,
+            ; set this code on Port D, and trigger an INT0 interrupt after each character read.
+            ; This emulates keyboard input programmatically.
+            LDI R17,0x00                    ; Raw key code.
+            LDI ZL,LOW(KEYMAPPRG << 1)      ; NOTE: The LSB of program memory address is used as a byte number: first or second,
+            LDI ZH,HIGH(KEYMAPPRG << 1)     ; see datasheet for more information.
 READ0:      LPM R4,Z+                       ;
-            AND R4,R4                       ; Достигли конца строки?
-            BREQ EMULINPUT                  ; Да, таблица сформирована, переходим к эмуляции ввода с клавиатуры.
-            MOV YL,R4                       ; Нет, продолжаем.
+            AND R4,R4                       ; Reached the end of the string?
+            BREQ EMULINPUT                  ; Yes, the table is formed, proceed to keyboard input emulation.
+            MOV YL,R4                       ; No, continue.
             LDI YH,HIGH(REVKEYMAP)          ;
-            ST Y,R17                        ; Записываем сырой код клавиши.
-            INC R17                         ; Переходим к следующему символу.
+            ST Y,R17                        ; Write the raw key code.
+            INC R17                         ; Move to the next symbol.
             RJMP READ0                      ;
 
             ;
-            ; Эмуляция ввода арифметических выражений.
+            ; Arithmetic expression input emulation.
             ;
-            ; NOTE: При тестировании ввода, если после чтения первого операнда возникает исключение,
-            ; несмотря на формирование сообщения об ошибке и переход в состояние SHOWRES, которое
-            ; игнорирует любой ввод кроме клавиши сброса, цикл эмуляции продолжит читать выражение до конца строки,
-            ; вызывая прерывания по клавиатуре и попадая в SHOWRES.
-            ; Но поскольку символа 'C' в полном арифметическом выражении не будет, никаких изменений в состоянии калькулятора
-            ; не произойдет. Поведение будет таким же, как в случае, когда пользователь получил сообщение об ошибке и продолжает
-            ; нажимать цифровые клавиши и клавиши операторов, а калькулятор игнорирует ввод и ожидает только нажатие клавиши 'C'.
-            ; Это сделано для простоты кода эмуляции - чтобы не делать доп. проверку, а просто дать коду "дочитать" строку до конца
-            ; и завершиться естественным путём.
+            ; NOTE: During input testing, if an exception occurs after reading the first operand,
+            ; despite generating an error message and transitioning to SHOWRES state, which
+            ; ignores all input except the reset key, the emulation loop will continue
+            ; reading the expression until the end of the string, triggering keyboard interrupts
+            ; and entering SHOWRES. However, since the full arithmetic expression does not contain
+            ; the 'C' key, no changes will occur in the calculator's state. The behavior will mimic
+            ; a user encountering an error message and continuing to press numeric or operator keys, which the calculator ignores while waiting for the 'C' key.
+            ; This simplifies the emulation code by allowing it to "read" the string to the end without additional checks, completing naturally.
 EMULINPUT:  LDI ZL,LOW(TESTNUM << 1)        ;
             LDI ZH,HIGH(TESTNUM << 1)       ;
 READ1:      LPM R4,Z+                       ;
-            AND R4,R4                       ; Достигли конца строки?
-            BREQ END                        ; Да, числовая строка "введена".
-            MOV YL,R4                       ; Нет, мапим ASCII-символ в код энкодера.
+            AND R4,R4                       ; Reached the end of the string?
+            BREQ END                        ; Yes, the numeric string is "entered".
+            MOV YL,R4                       ; No, map the ASCII symbol to encoder code.
             LDI YH,HIGH(REVKEYMAP)          ;
             LD R16,Y                        ;
             CLC                             ;
-            ROL R16                         ; Размещаем биты кода в старшем полубайте порта D.
+            ROL R16                         ; Place code bits in the high nibble of Port D.
             ROL R16                         ;
             ROL R16                         ;
             ROL R16                         ;
-            LDI R17,0b00000100              ; Эмулируем бит готовности данных энкодера,
-            EOR R16,R17                     ; устанавливая INT0 в единицу - это инициирует прерывание.
+            LDI R17,0b00000100              ; Emulate the encoder's data ready bit,
+            EOR R16,R17                     ; setting INT0 high - this triggers the interrupt.
             OUT PORTD,R16                   ;
-            LDI R17,0b11111011              ; Убираем бит готовности данных, чтобы на следующей итерации
-            AND R16,R17                     ; вновь инициировать прерывание.
+            LDI R17,0b11111011              ; Clear the data ready bit, so the next iteration
+            AND R16,R17                     ; can trigger another interrupt.
             OUT PORTD,R16                   ;
             RJMP READ1                      ;
 .ENDIF
@@ -1000,15 +999,17 @@ READ1:      LPM R4,Z+                       ;
 END:        RJMP END
 
 ;
-; Таблица ASCII-кодов нажатых клавиш.
+; Table of ASCII codes for pressed keys.
 KEYMAPPRG:  .DB "C0./789x456-123+",0
 
 ;
-; Тестовые примеры для проверки корректного ввода с клавиатуры.
-; Примеры определены в [Траектории на графе состояний и тестовые примеры.xmind].
-; сначала поряд идут "зелёные" примеры, содержащие корректные числовые строки.
-; Далее, с новой нумерацией, идут "жёлтые" примеры, содержащие некорректные числовые строки,
-; которые должны быть проигнорированы обработчиком клавиатуры.
+; Test cases for verifying correct keyboard input.
+; The examples are defined in [Траектории на графе состояний и тестовые примеры.xmind].
+; First come the "green" examples, containing valid numeric strings.
+; Then, with a new numbering, follow the "yellow" examples, containing invalid numeric strings
+; that must be ignored by the keyboard handler.
+;
+; NOTE: It hasn't been translated to preserve exact cyrillic matching with the aforementioned file.
 .IFDEF EMULKEYPD
             ; Пример 1. Корректные значения.
 ;TESTNUM:  .DB "0.0123456789123",0
@@ -1179,7 +1180,7 @@ KEYMAPPRG:  .DB "C0./789x456-123+",0
 
             ;
             ; Пример 3. Обработка исключений. Переполнение в ATOF при конвертации первого операнда.
-            ; для тестов нужно временно увеличить LCDLEN до 40 знаков.
+            ; Для тестов нужно временно увеличить LCDLEN до 40 знаков.
 ;TESTNUM:  .DB "340282430000000000000000000000000000000/3.7+",0
 
             ;
