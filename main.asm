@@ -42,9 +42,9 @@ NUMSTR:     .BYTE 256                       ; 0x0800. Pointer to the numeric ASC
             .INCLUDE "float32avr.asm"
 
 ;
-; Обработка прерываний от клавиатуры.
-KEYPAD:     IN KEY,PIND                     ; Сырой код клавиши - в старшем полубайте порта D.
-            LDI R17,0xF0                    ; Извлекаем и сдвигаем в младший полубайт.
+; Keyboard interrupt handler.
+KEYPAD:     IN KEY,PIND                     ; Raw key code is in the upper nibble of port D.
+            LDI R17,0xF0                    ; Extract and shift it to the lower nibble.
             AND KEY,R17                     ;
             CLC                             ;
             ROR KEY                         ;
@@ -52,38 +52,38 @@ KEYPAD:     IN KEY,PIND                     ; Сырой код клавиши -
             ROR KEY                         ;
             ROR KEY                         ;
 
-            LDI R17,LOW(KEYMAP)             ; Добавляем код клавиши в младший полубайт адреса таблицы символов.
-            OR R17,KEY                      ; Y=0x07F0|0x0X, 0x0X - код клавиши в отрезке [0x00,0x0F].
+            LDI R17,LOW(KEYMAP)             ; Add the key code to the lower nibble of the ASCII character table address.
+            OR R17,KEY                      ; Y=0x07F0|0x0X, 0x0X - key code in the range [0x00,0x0F].
             MOV YL,R17                      ;
             LDI YH,HIGH(KEYMAP)             ;
 
-            LD KEY,Y                        ; KEY=ASCII(RAWKEY), RAWKEY - сырой код от MM74C922.
+            LD KEY,Y                        ; KEY=ASCII(RAWKEY), RAWKEY - raw code from MM74C922.
 
 .IFDEF EMULKEYPD
-            POP RETH                        ; Бэкапим адрес возврата после прерывания.
+            POP RETH                        ; Backup return address from the interrupt.
             POP RETL                        ;
-            POP R17                         ; Извлекаем адрес текущего состояния.
+            POP R17                         ; Extract the address of the current state handler.
             POP R16                         ;
-            PUSH ZL                         ; Бэкапим указатель на тестовую числовую строку, на основе которой эмулируется ввод.
+            PUSH ZL                         ; Backup pointer to the test numeric string used for input emulation.
             PUSH ZH                         ;
-            MOV ZL,R16                      ; Перемещаем адрес обработчика текущего состояния в Z.
+            MOV ZL,R16                      ; Move the address of the current state handler to Z.
             MOV ZH,R17                      ;
             IJMP                            ;
 .ELSE
-            POP RETH                        ; Бэкапим адрес возврата после прерывания.
+            POP RETH                        ; Backup return address from the interrupt.
             POP RETL                        ;
-            POP ZH                          ; Извлекаем адрес обработчика текущего состояния.
+            POP ZH                          ; Extract the address of the current state handler.
             POP ZL                          ;
-            IJMP                            ; Прыгаем на обработчик, соответствующий текущему состоянию.
+            IJMP                            ; Jump to the current state handler.
 .ENDIF
 
             ;
-            ; S0 - начальное состояние перед вводом первого или второго операнда.
+            ; S0 - Initial state before entering the first or second operand.
             ;
-            ; Допустимы только цифровые клавиши и минус.
+            ; Only numeric keys and minus are allowed.
 S0:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='C'?
-            BREQ S0RESETIN                  ; Да, сбрасываем ввод, возвращаемся в нулевое состояние.
+            BREQ S0RESETIN                  ; Yes, reset input and return to the zero state.
 
             LDI R16,'-'                     ;
             EOR R16,KEY                     ; KEY='-'?
@@ -93,17 +93,17 @@ S0:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='0'?
             BREQ S0DIG0                     ;
 
-            LDI R16,0xF0                    ; Все цифры от 1 до 9 в ASCII имеют одинаковый старший полубайт равный 0x30.
-            AND R16,KEY                     ; Другие возможные клавиши на этом этапе: '.','+','*','/', имеют старший полубайт равный 0x20.
+            LDI R16,0xF0                    ; All digits from 1 to 9 in ASCII have the same upper nibble equal to 0x30.
+            AND R16,KEY                     ; Other possible keys: '.','+','*','/', have the upper nibble equal to 0x20.
             LDI R17,0x30                    ;
             EOR R16,R17                     ; KEY=['1','9']?
             BREQ S0DIG19                    ;
 
-            LDI R16,LOW(S0)                 ; Была нажата недопустимая в этом состоянии клавиша.
+            LDI R16,LOW(S0)                 ; An invalid key was pressed in this state.
             LDI R17,HIGH(S0)                ; S0->S0.
-            RJMP S0END                      ; Игнорируем ввод и остаёмся в текущем состоянии.
+            RJMP S0END                      ; Ignore input and remain in the current state.
 
-S0RESETIN:  JMP RESETINPUT                  ; Дальний прыжок, т.к. не достаем непосредственно из BREQ.
+S0RESETIN:  JMP RESETINPUT                  ; Long jump as it cannot be reached directly from BREQ.
 
 S0MINUS:    LDI R16,LOW(S2)                 ; S0->S2.
             LDI R17,HIGH(S2)                ;
@@ -120,17 +120,17 @@ S0PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
             INC S                           ;
 
 ;
-; NOTE: Отключаем взаимодействие с LCD в режиме эмуляции клавиатуры.
-; Причина в том, что в режиме эмуляции клавиатуры после передачи в LCD
-; Управляющей инструкции, на порту B может быть установлен седьмой бит,
-; который в режиме чтения является BUSY-флагом, но поскольку эмуляции LCD нет, то
-; не происходит сброса состояния порта B и при вызове очередной LCD-инструкции
-; мы попадём в бесконечный цикл ожидания сброса BUSY-флага.
+; NOTE: Disable interaction with LCD in keyboard emulation mode.
+; The reason is that in keyboard emulation mode, after transmitting
+; a control instruction to the LCD, the seventh bit may remain set on port B.
+; This bit serves as the BUSY flag in read mode. However, since LCD emulation
+; is not implemented, the state of port B does not reset. When the next LCD instruction is called,
+; it might lead to an infinite wait for the BUSY flag to clear.
 .IFNDEF EMULKEYPD
-            PUSH S                          ; Бэкапим регистры, которые PRNTCHR может испортить.
+            PUSH S                          ; Backup registers that PRNTCHR may overwrite.
             PUSH R16                        ;
             PUSH R17                        ;
-            MOV CHAR,KEY                    ; Выводим нажатую клавишу на LCD.
+            MOV CHAR,KEY                    ; Display the pressed key on the LCD.
             RCALL PRNTCHR                   ;
             POP R17                         ;
             POP R16                         ;
@@ -138,25 +138,25 @@ S0PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
 .ENDIF
 
 .IFDEF EMULKEYPD
-S0END:      POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+S0END:      POP ZH                          ; Restore pointer to the test numeric string.
             POP ZL                          ;
-            PUSH R16                        ; Запоминаем новое состояние.
+            PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ELSE
-S0END:      PUSH R16                        ; Запоминаем новое состояние.
+S0END:      PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ENDIF
 
             ;
-            ; S1 - промежуточное состояние после нажатия нуля.
+            ; S1 - Intermediate state after pressing zero.
             ;
-            ; Допустимы только точка или клавиши оператора.
+            ; Only a decimal point or operator keys are allowed.
 S1:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='C'?
             BREQ S1RESETIN                  ;
@@ -165,12 +165,12 @@ S1:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='.'?
             BREQ S1DECPNT                   ;
 
-            LDI R16,0xF0                    ; '+','-','*','/' - в ASCII имеют одинаковый старший полубайт равный 0x20.
-            AND R16,KEY                     ; А '.' мы уже исключили выше.
+            LDI R16,0xF0                    ; '+','-','*','/' in ASCII have the same high nibble: 0x20.
+            AND R16,KEY                     ; '.' is excluded above.
             LDI R17,0x20                    ;
             EOR R16,R17                     ; KEY=['+','-','/']?
             BREQ S1OPERATOR                 ;
-            LDI R16,'x'                     ; Мы заменили символ умножения на 'x', который находится в последней строке ASCII-таблицы.
+            LDI R16,'x'                     ; We replaced the multiplication symbol with 'x', which is in the last row of the ASCII table.
             EOR R16,KEY                     ; KEY='x'?
             BREQ S1OPERATOR                 ;
 
@@ -178,18 +178,18 @@ S1:         LDI R16,'C'                     ;
             LDI R17,HIGH(S1)                ;
             RJMP S1END                      ;
 
-S1RESETIN:  JMP RESETINPUT                  ; Дальний прыжок, т.к. не достаем непосредственно из BREQ.
+S1RESETIN:  JMP RESETINPUT                  ; Long jump as BREQ can't reach directly.
 
 S1DECPNT:   LDI R16,LOW(S3)                 ; S1->S3.
             LDI R17,HIGH(S3)                ;
             RJMP S1PRNTKEY                  ;
 
 S1OPERATOR: LDI R16,2                       ;
-            EOR R16,P                       ; Завершен ввод второго операнда?
-            BREQ S1OPERAND2                 ; Да, переходим к конвертации в float32 и вычислению.
-            RJMP OPERAND1                   ; Нет, введен первый операнд, конвертируем его в float.
+            EOR R16,P                       ; Is the second operand input complete?
+            BREQ S1OPERAND2                 ; Yes, proceed to float conversion and calculation.
+            RJMP OPERAND1                   ; No, first operand entered, convert it to float.
 
-S1OPERAND2: JMP OPERAND2                    ; Дальний прыжок.
+S1OPERAND2: JMP OPERAND2                    ; Long jump.
 
 S1PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
             INC S                           ;
@@ -198,7 +198,7 @@ S1PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
             PUSH S                          ;
             PUSH R16                        ;
             PUSH R17                        ;
-            MOV CHAR,KEY                    ; Выводим нажатую клавишу на LCD.
+            MOV CHAR,KEY                    ; Display the pressed key on the LCD.
             RCALL PRNTCHR                   ;
             POP R17                         ;
             POP R16                         ;
@@ -206,11 +206,11 @@ S1PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
 .ENDIF
           
 .IFDEF EMULKEYPD
-S1END:      POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+S1END:      POP ZH                          ; Restore pointer to the test numeric string.
             POP ZL                          ;
-            PUSH R16                        ; Запоминаем новое состояние.
+            PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ELSE
@@ -222,9 +222,9 @@ S1END:      PUSH R16                        ;
 .ENDIF
 
             ;
-            ; S2 - Промежуточное состояние после нажатия минуса.
+            ; S2 - Intermediate state after pressing minus.
             ;
-            ; Допустимы только цифровые клавиши.
+            ; Only numeric keys are allowed.
 S2:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='C'?
             BREQ RESETINPUT                 ;
@@ -257,7 +257,7 @@ S2PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
             PUSH S                          ;
             PUSH R16                        ;
             PUSH R17                        ;
-            MOV CHAR,KEY                    ; Выводим нажатую клавишу на LCD.
+            MOV CHAR,KEY                    ; Display the pressed key on the LCD.
             RCALL PRNTCHR                   ;
             POP R17                         ;
             POP R16                         ;
@@ -265,11 +265,11 @@ S2PRNTKEY:  ST X+,KEY                       ; *NUMSTR=KEY.
 .ENDIF
 
 .IFDEF EMULKEYPD
-S2END:      POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+S2END:      POP ZH                          ; Restore pointer to the test numeric string.
             POP ZL                          ;
-            PUSH R16                        ; Запоминаем новое состояние.
+            PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ELSE
@@ -281,22 +281,22 @@ S2END:      PUSH R16                        ;
 .ENDIF
 
             ;
-            ; Сброс ввода по нажатию клавиши 'C'.
+            ; Reset input when the 'C' key is pressed.
 RESETINPUT:
 .IFDEF EMULKEYPD
-            POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+            POP ZH                          ; Restore the pointer to the test numeric string.
             POP ZL                          ;
 .ENDIF
             LDI R16,2                       ;
-            EOR R16,P                       ; Сброс нажат в фазе ввода второго операнда?
-            BRNE RESET1                     ; Нет, мы еще в фазе ввода первого операнда (до нажатия оператора).
-            POP R16                         ; Да, первый операнд уже введён и в стеке лежат: символ оператора
-            POP R16                         ; и четыре байта первого операнда в формате float32.
-            POP R16                         ; Выбрасываем 4 байта первого операнда.
+            EOR R16,P                       ; Was the reset pressed during the input of the second operand?
+            BRNE RESET1                     ; No, we are still in the phase of entering the first operand (before pressing the operator key).
+            POP R16                         ; Yes, the first operand has already been entered, and the stack contains: the operator character
+            POP R16                         ; and four bytes of the first operand in float32 format.
+            POP R16                         ; Discard the 4 bytes of the first operand.
             POP R16                         ;
-            POP R16                         ; Выбрасываем символ оператора. Стек пуст.
+            POP R16                         ; Discard the operator character. The stack is now empty.
 
-RESET1:     LDI XL,LOW(NUMSTR)              ; Смещаем указатель NUMSTR в начало строки.
+RESET1:     LDI XL,LOW(NUMSTR)              ; Move the NUMSTR pointer to the beginning of the string.
             LDI XH,HIGH(NUMSTR)             ;
 
             LDI R16,0                       ; S=0.
@@ -305,10 +305,10 @@ RESET1:     LDI XL,LOW(NUMSTR)              ; Смещаем указатель 
             LDI R16,1                       ; P=1.
             MOV P,R16                       ;
 
-            LDI R16,LCDLEN-1                ; Резервируем последний символ первой строки под символ оператора.
+            LDI R16,LCDLEN-1                ; Reserve the last character of the first line for the operator symbol.
             MOV LCDLIM,R16                  ;
 
-            LDI R16,LOW(S0)                 ; Начальное состояние - S0.
+            LDI R16,LOW(S0)                 ; Initial state - S0.
             LDI R17,HIGH(S0)                ;
             PUSH R16                        ;
             PUSH R17                        ;
@@ -322,46 +322,46 @@ RESET1:     LDI XL,LOW(NUMSTR)              ; Смещаем указатель 
             RETI                            ;
 
             ;
-            ; Ввод первого операнда завершён.
+            ; The input of the first operand is complete.
 .IFDEF EMULKEYPD
-OPERAND1:   POP ZH                          ; Временно восстанавливаем указатель на тестовую числовую строку.
+OPERAND1:   POP ZH                          ; Temporarily restore the pointer to the test numeric string.
             POP ZL                          ;
-            PUSH KEY                        ; Сохраняем в самый низ стека нажатый арифметический оператор.
-            PUSH ZL                         ; Помещаем сверху указатель на строку.
+            PUSH KEY                        ; Save the pressed arithmetic operator at the bottom of the stack.
+            PUSH ZL                         ; Place the pointer to the string on top.
             PUSH ZH                         ;
 .ELSE
-OPERAND1:   PUSH KEY                        ; Сохраняем в самый низ стека нажатый арифметический оператор.
+OPERAND1:   PUSH KEY                        ; Save the pressed arithmetic operator at the bottom of the stack.
 .ENDIF
             LDI R16,0                       ; *NUMSTR='\0'.
             ST X,R16                        ;
 
-            LDI XL,LOW(NUMSTR)              ; Возвращаем указатель в начало строки
-            LDI XH,HIGH(NUMSTR)             ; Перед вызовом ATOF.
+            LDI XL,LOW(NUMSTR)              ; Return the pointer to the start of the string
+            LDI XH,HIGH(NUMSTR)             ; before calling ATOF.
 
             ;
-            ; Обработчик ошибок, возникающих при вычислениях с плавающей точкой, которые происходят внутри ATOF.
+            ; Error handler for floating-point calculations performed inside ATOF.
             ;
-            ; В силу текущих ограничений на ввод: только десятичные дроби, без экспоненциальной записи,
-            ; при выполнении ATOF переполнение возникнуть не может, а деление на ноль в ATOF невозможно в принципе.
+            ; Due to current input limitations: only decimal fractions, no exponential notation,
+            ; overflow cannot occur during ATOF, and division by zero in ATOF is impossible in principle.
             ;
-            ; Но если способ ввода будет обновлён, то возможно переполнение при конвертации,
-            ; когда для промежуточных вычислениях одинарной точности становится недостаточно.
+            ; But if the input method is updated, then an overflow is possible during conversion,
+            ; when single precision becomes insufficient during intermediate calculations.
             ;
-            ; TODO: Добавить вывод сообщения об ошибке на LCD.
-            ; В первой версии это не критично, т.к. ввод ограничен и исключения в ATOF быть не может.
+            ; TODO: Add error message output to the LCD.
+            ; For the first version, this is not critical, as the input is limited and exceptions in ATOF cannot occur.
             LDI ZL,LOW(OP1FLTERR0)          ;
             LDI ZH,HIGH(OP1FLTERR0)         ;
             RJMP OP1CNVRT                   ;
-OP1FLTERR0: POP R16                         ; Выбрасываем из стека адрес возврата после ATOF.
+OP1FLTERR0: POP R16                         ; Discard the return address after ATOF from the stack.
             POP R16                         ;
-            POP RETH                        ; Восстанавливаем адрес возврата после прерывания.
+            POP RETH                        ; Restore the return address from the interrupt.
             POP RETL                        ;
-            POP KEY                         ; Перед FTOA мы сохраняли KEY - извлекаем его.
+            POP KEY                         ; KEY was saved before ATOF - discard it.
 .IFDEF EMULKEYPD
-            POP ZH                          ; Если мы в режиме эмуляции и тестирования ввода с клавиатуры, то
-            POP ZL                          ; восстанавливаем указатель на тестовую числовую строку.
+            POP ZH                          ; If in keyboard emulation mode,
+            POP ZL                          ; restore the pointer to the test numeric string.
 .ENDIF
-            POP R16                         ; На дне стека остался еще символ оператора - он больше не нужен.
+            POP R16                         ; The operator symbol at the bottom of the stack is no longer needed.
 
             LDI XL,LOW(NUMSTR)              ; NUMSTR="ERR".
             LDI XH,HIGH(NUMSTR)             ;
@@ -373,46 +373,46 @@ OP1FLTERR0: POP R16                         ; Выбрасываем из сте
             CLR R16                         ;
             ST X,R16                        ; NUMSTR+='\0'.
 
-            LDI R16,LOW(SHOWRES)            ; При вводе первого операнда произошло исключение,
-            LDI R17,HIGH(SHOWRES)           ; Дальнейший ввод не имеет смысла, показываем сообщение об ошибке.
+            LDI R16,LOW(SHOWRES)            ; An exception occurred while entering the first operand,
+            LDI R17,HIGH(SHOWRES)           ; further input is pointless, show an error message.
             RJMP OP1END                     ;
 
-OP1CNVRT:   PUSH KEY                        ; Хотя KEY уже есть в стеке, ниже он нужен для вывода на LCD.
-            PUSH RETL                       ; Мы всё еще внутри обработки прерывания, поэтому важно
-            PUSH RETH                       ; не потерять корректный адрес возврата.
+OP1CNVRT:   PUSH KEY                        ; Although KEY is already on the stack, it will be needed later for LCD output.
+            PUSH RETL                       ; We are still inside an interrupt handler, so it is essential
+            PUSH RETH                       ; not to lose the correct return address.
             CALL ATOF                       ;
             POP RETH                        ;
             POP RETL                        ;
             POP KEY                         ;
 
 .IFDEF EMULKEYPD
-            POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+            POP ZH                          ; Restore the pointer to the test numeric string.
             POP ZL                          ;
 .ENDIF
-            PUSH R11                        ; Первый операнд введен и конвертирован в float32.
-            PUSH R10                        ; Сохраняем его в стеке в little-endian.
+            PUSH R11                        ; The first operand has been entered and converted to float32.
+            PUSH R10                        ; Save it on the stack in little-endian.
             PUSH R9                         ;
             PUSH R8                         ;
 
-            LDI XL,LOW(NUMSTR)              ; Сбрасываем указателя строки в начало.
+            LDI XL,LOW(NUMSTR)              ; Reset the string pointer to the beginning.
             LDI XH,HIGH(NUMSTR)             ;
 
-            CLR S                           ; Сбрасываем счетчик введенных символов.
-            LDI R16,2                       ; Далее будет ввод второго операнда.
+            CLR S                           ; Reset the entered character counter.
+            LDI R16,2                       ; Next, the second operand will be entered.
             MOV P,R16                       ;
-            LDI R16,LCDLEN                  ; При вводе второго операнда в конце строки уже не надо резервировать символ под оператор,
-            MOV LCDLIM,R16                  ; поэтому вся строка LCD отведена под число (имеется ввиду видимая часть).
+            LDI R16,LCDLEN                  ; When entering the second operand, there's no need to reserve a character for the operator at the end of the string,
+            MOV LCDLIM,R16                  ; so the entire LCD line is allocated for the number (visible part).
 
 .IFNDEF EMULKEYPD
-            RCALL CURSL1END                 ; Ставим курсор в конец видимой части первой строки LCD.
+            RCALL CURSL1END                 ; Place the cursor at the end of the visible part of the first LCD line.
             PUSH S                          ;
-            MOV CHAR,KEY                    ; Выводим символ оператора на LCD.
+            MOV CHAR,KEY                    ; Output the operator symbol to the LCD.
             RCALL PRNTCHR                   ;
             POP S                           ;
-            RCALL CURSL2BEG                 ; Ставим курсор в начало второй строки LCD.
+            RCALL CURSL2BEG                 ; Place the cursor at the beginning of the second LCD line.
 .ENDIF
 
-            LDI R16,LOW(S0)                 ; Ввод второго операнда идентичен вводу первого.
+            LDI R16,LOW(S0)                 ; Entering the second operand is identical to entering the first.
             LDI R17,HIGH(S0)                ;
 OP1END:     PUSH R16                        ;
             PUSH R17                        ;
@@ -421,39 +421,39 @@ OP1END:     PUSH R16                        ;
             RETI                            ;
 
             ;
-            ; Ввод второго операнда завершён.
+            ; The entry of the second operand is completed.
 OPERAND2:   LDI R16,0                       ; *NUMSTR='\0'.
             ST X,R16                        ;
 
-            LDI XL,LOW(NUMSTR)              ; Возвращаем указатель в начало строки
-            LDI XH,HIGH(NUMSTR)             ; перед вызовом ATOF.
+            LDI XL,LOW(NUMSTR)              ; Return the pointer to the start of the string
+            LDI XH,HIGH(NUMSTR)             ; before calling ATOF.
 
             ;
-            ; Обработчик ошибок, возникающих при вычислениях с плавающей точкой, которые происходят внутри ATOF.
+            ; Error handler for floating-point calculations performed inside ATOF.
             ;
-            ; В силу текущих ограничений на ввод: только десятичные дроби, без экспоненциальной записи -
-            ; при выполнении ATOF переполнение возникнуть не может, а деление на ноль в ATOF невозможно в принципе.
+            ; Due to current input limitations: only decimal fractions, no exponential notation,
+            ; overflow cannot occur during ATOF, and division by zero in ATOF is impossible in principle.
             ;
-            ; Но если способ ввода будет обновлён, то возможно переполнение при конвертации,
-            ; когда для промежуточных вычислениях одинарной точности становится недостаточно.
+            ; But if the input method is updated, then an overflow is possible during conversion,
+            ; when single precision becomes insufficient during intermediate calculations.
             ;
-            ; TODO: В случае исключения в ATOF выводить ошибку на LCD.
-            ; Сейчас не критично, т.к. текущие ограничения на ввод операндов не приведут к исключению в ATOF.
+            ; TODO: Add error message output to the LCD.
+            ; For the first version, this is not critical, as the input is limited and exceptions in ATOF cannot occur.
             LDI ZL,LOW(OP2FLTERR0)          ;
             LDI ZH,HIGH(OP2FLTERR0)         ;
             RJMP OP2CONVERT                 ;
-OP2FLTERR0: POP R16                         ; Выбрасываем из стека адрес возврата после ATOF.
+OP2FLTERR0: POP R16                         ; Discard the return address after ATOF from the stack.
             POP R16                         ;
-            POP RETH                        ; Восстанавливаем адрес возврата после прерывания.
+            POP RETH                        ; Restore the return address from the interrupt.
             POP RETL                        ;
 .IFDEF EMULKEYPD
-            POP ZH                          ; Если мы в режиме эмуляции и тестирования ввода с клавиатуры, то
-            POP ZL                          ; восстанавливаем указатель на тестовую числовую строку.
+            POP ZH                          ; If in keyboard emulation mode,
+            POP ZL                          ; restore the pointer to the test numeric string.
 .ENDIF
-            LDI YL,LOW(SP)                  ; В стеке осталось 4 байта первого операнда в формате float32
-            LDI YH,HIGH(SP)                 ; и один байт символа арифметического оператора.
-            OUT SPL,YL                      ; Поскольку возникло исключение и они нам больше не нужны,
-            OUT SPH,YH                      ; мы просто сбрасываем стек в его начальный адрес.
+            LDI YL,LOW(SP)                  ; The stack contains 4 bytes of the first operand in float32 format
+            LDI YH,HIGH(SP)                 ; and one byte of the arithmetic operator symbol.
+            OUT SPL,YL                      ; Since an exception occurred and they are no longer needed,
+            OUT SPH,YH                      ; simply reset the stack to its initial address.
 
             LDI XL,LOW(NUMSTR)              ; NUMSTR="ERR".
             LDI XH,HIGH(NUMSTR)             ;
@@ -472,50 +472,50 @@ OP2CONVERT: PUSH RETL                       ;
             POP RETH                        ;
             POP RETL                        ;
 
-            MOV R12,R8                      ; Размещаем второй введённый операнд
-            MOV R13,R9                      ; как второй операнд арифметической операции.
+            MOV R12,R8                      ; Place the second entered operand
+            MOV R13,R9                      ; as the second operand of the arithmetic operation.
             MOV R14,R10                     ;
             MOV R15,R11                     ;
 
 .IFDEF EMULKEYPD
-            POP R18                         ; Временно восстанавливаем указатель на тестовую числовую строку.
+            POP R18                         ; Temporarily restore the pointer to the test numeric string.
             POP R17                         ;
 .ENDIF
-            POP R8                          ; Извлекаем первый введённый операнд и размещаем его
-            POP R9                          ; как первый операнд арифметической операции.
+            POP R8                          ; Restore the first entered operand and place it
+            POP R9                          ; as the first operand of the arithmetic operation.
             POP R10                         ;
             POP R11                         ;
 
             POP R16                         ; R16=OPERATOR.
 
 .IFDEF EMULKEYPD
-            PUSH R17                        ; Снова бэкапим указатель на тестовую строку.
+            PUSH R17                        ; Backup the pointer to the test numeric string again.
             PUSH R18                        ;
 .ENDIF
 
             ;
-            ; Обработчик ошибок для арифметических подпрограмм: FADD32, FSUB32, FMUL32, FDIV32.
+            ; Error handler for arithmetic subroutines: FADD32, FSUB32, FMUL32, FDIV32.
             ;
-            ; Если арифметическая операция выполняется без переполнения или деления на ноль,
-            ; то последующее выполнение конвертации результата FTOA не приведёт ни к переполнению, ни к делению на ноль.
+            ; If the arithmetic operation is executed without overflow or division by zero,
+            ; then subsequent conversion of the result by FTOA will not lead to either overflow or division by zero.
             ;
-            ; Более того, из-за текущих ограничений на ввод:только десятичные дроби, без экспоненциальной записи -
-            ; сейчас при выполнении любой арифметической операции может произойти только деление на ноль.
-            LDI ZL,LOW(OP2FLTERR1)          ; Если при вызове FADD32, FSUB32, FMUL32, FDIV32
-            LDI ZH,HIGH(OP2FLTERR1)         ; произойдет ошибка: деление на ноль или переполнение,
-            RJMP OPCHK                      ; то мы попадём на этот обработчик.
-OP2FLTERR1: POP R16                         ; Адрес возврата из подпрограммы, которая выбросила исключение,
-            POP R16                         ; нас больше не интересует.
-            POP RETH                        ; Перед вызовом адрес возврата из прерывания был помещен в стек - восстанавливаем его.
+            ; Moreover, due to current input limitations: only decimal fractions, without exponential notation - 
+            ; currently, during any arithmetic operation, only division by zero can occur.
+            LDI ZL,LOW(OP2FLTERR1)          ; If an error occurs during FADD32, FSUB32, FMUL32, FDIV32
+            LDI ZH,HIGH(OP2FLTERR1)         ; such as division by zero or overflow,
+            RJMP OPCHK                      ; the execution will jump to this handler.
+OP2FLTERR1: POP R16                         ; The return address from the subroutine that threw the exception
+            POP R16                         ; is no longer of interest.
+            POP RETH                        ; Restore the return address from the interrupt that was placed in the stack earlier.
             POP RETL                        ;
 .IFDEF EMULKEYPD
-            POP ZH                          ; Если мы в режиме эмуляции и тестирования ввода с клавиатуры, то
-            POP ZL                          ; восстанавливаем указатель на тестовую числовую строку.
+            POP ZH                          ; If in keyboard emulation mode,
+            POP ZL                          ; restore the pointer to the test numeric string.
 .ENDIF
 
 ;
-; Поскольку в режиме эмуляции клавиатуры LCD не используется,
-; сообщение об ошибке для визуального контроля выводим в SRAM.
+; In keyboard emulation mode, since the LCD is not used,
+; display the error for visual control in SRAM.
 .IFDEF EMULKEYPD
             LDI XL,LOW(NUMSTR)              ; NUMSTR="ERR".
             LDI XH,HIGH(NUMSTR)             ;
@@ -527,7 +527,7 @@ OP2FLTERR1: POP R16                         ; Адрес возврата из �
             CLR R16                         ;
             ST X,R16                        ; NUMSTR+='\0'.
 ;
-; Иначе - выводим ошибку сразу на LCD.
+; Otherwise, display the error directly on the LCD.
 .ELSE
             RCALL DSBLCURS                  ;
             RCALL CLEARLCD                  ;
@@ -540,7 +540,7 @@ OP2FLTERR1: POP R16                         ; Адрес возврата из �
             RCALL PRNTCHR                   ; LCD+=R.
             RCALL PRNTCHR                   ; LCD+=R.
 .ENDIF
-            RJMP OP2END                     ; Конец обработчика исключений OP2FLTERR1.
+            RJMP OP2END                     ; End of exception handler OP2FLTERR1.
 
 OPCHK:      LDI R17,'+'                     ;
             EOR R17,R16                     ;
@@ -588,29 +588,29 @@ CALCDIV:    PUSH RETL                       ;
 RESULT:     LDI XL,LOW(NUMSTR)              ;
             LDI XH,HIGH(NUMSTR)             ;
 
-            LDI R16,LCDLEN                  ; Устанавливаем аргумент MAXLEN подпрограммы FTOAE
-            MOV R12,R16                     ; равным количеству видимых символов в LCD.
+            LDI R16,LCDLEN                  ; Set the MAXLEN argument of the FTOAE subroutine
+            MOV R12,R16                     ; equal to the number of visible characters on the LCD.
 
             PUSH RETL                       ;
             PUSH RETH                       ;
-            CALL FTOAE                      ; *NUMSTR=FTOAE(C,LCDLEN), где C - результат вычислений в формате бинарного float32,
-            POP RETH                        ; а LCDLEN - максимальная длина выходной строки, равная длине строки в LCD.
+            CALL FTOAE                      ; *NUMSTR=FTOAE(C,LCDLEN), where C is the computation result in float32,
+            POP RETH                        ; and LCDLEN is the maximum output string length, equal to the LCD line length.
             POP RETL                        ;
 
 .IFNDEF EMULKEYPD
             RCALL DSBLCURS                  ;
             RCALL CLEARLCD                  ;
 
-            LDI XL,LOW(NUMSTR)              ; Смещаем указатель в начало строки, содержащей результат вычисления.
+            LDI XL,LOW(NUMSTR)              ; Shift the pointer to the start of the string containing the computation result.
             LDI XH,HIGH(NUMSTR)             ;
-            RCALL PRNTSTR                   ; Выводим строку с результатом на LCD.
+            RCALL PRNTSTR                   ; Output the string with the result to the LCD.
 .ENDIF
 
 .IFDEF EMULKEYPD
-            POP ZH                          ; Восстанавливаем указатель на тестовую строку.
+            POP ZH                          ; Restore the pointer to the test numeric string.
             POP ZL                          ;
 .ENDIF
-OP2END:     LDI R16,LOW(SHOWRES)            ; Результат вычислен, новое состояние - показ результата.
+OP2END:     LDI R16,LOW(SHOWRES)            ; Result computed, new state: show result.
             LDI R17,HIGH(SHOWRES)           ;
             PUSH R16                        ;
             PUSH R17                        ;
@@ -619,17 +619,17 @@ OP2END:     LDI R16,LOW(SHOWRES)            ; Результат вычисле�
             RETI                            ;
 
             ;
-            ; SHOWRES - холостое состояние для показа результата последнего вычисления.
+            ; SHOWRES - Idle state for displaying the result of the last calculation.
             ;
-            ; Разрешена только клавиша сброса.
+            ; Only the reset key is allowed.
 SHOWRES:    LDI R16,'C'                     ;
-            EOR R16,KEY                     ; Была нажата клавиша 'C'?
-            BRNE STAY                       ; Нет, игнорируем нажатие.
-            JMP RESETINPUT                  ; Да, сбрасываем состояние калькулятора на нулевое.
+            EOR R16,KEY                     ; Was the 'C' key pressed?
+            BRNE STAY                       ; No, ignore the key press.
+            JMP RESETINPUT                  ; Yes, reset the calculator to its initial state.
 
 .IFDEF EMULKEYPD
-STAY:       POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
-            POP ZL                          ; Стек пустой.
+STAY:       POP ZH                          ; Restore the pointer to the test numeric string.
+            POP ZL                          ; Stack is empty.
             LDI R16,LOW(SHOWRES)            ;
             LDI R17,HIGH(SHOWRES)           ;
 .ELSE
@@ -643,9 +643,9 @@ STAY:       LDI R16,LOW(SHOWRES)            ;
             RETI                            ;
 
             ;
-            ; S3 - промежуточное состояние после нажатия точки.
+            ; S3 - Intermediate state after pressing the decimal point.
             ;
-            ; Допустимы только цифровые клавиши.
+            ; Only numeric keys are allowed.
 S3:         LDI R16,'C'                     ;
             EOR R16,KEY                     ;
             BREQ S3RESETIN                  ;
@@ -672,7 +672,7 @@ S3DIG09:    LDI R16,LOW(S5)                 ;
             PUSH S                          ;
             PUSH R16                        ;
             PUSH R17                        ;
-            MOV CHAR,KEY                    ; Выводим нажатую клавишу на LCD.
+            MOV CHAR,KEY                    ; Display the pressed key on the LCD.
             RCALL PRNTCHR                   ;
             POP R17                         ;
             POP R16                         ;
@@ -680,11 +680,11 @@ S3DIG09:    LDI R16,LOW(S5)                 ;
 .ENDIF
 
 .IFDEF EMULKEYPD
-S3END:      POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+S3END:      POP ZH                          ; Restore the pointer to the test numeric string.
             POP ZL                          ;
-            PUSH R16                        ; Запоминаем новое состояние.
+            PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore the return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ELSE
@@ -696,11 +696,11 @@ S3END:      PUSH R16                        ;
 .ENDIF
 
             ;
-            ; S4 - ввод цифр целой части.
+            ; S4 - Entering digits of the integer part.
             ;
-            ; В этом состоянии допустимы все клавиши, поэтому нет ветки для дефолтного поведения.
-            ; Если нажата клавиша десятичной точки и доступно только одно знакоместо (как раз под точку),
-            ; ввод точки игнорируется, чтобы избежать некорректного значения с висящей точкой вида "123.".
+            ; In this state, all keys are allowed, so there is no default behavior branch.
+            ; If the decimal point key is pressed and only one space is available (just enough for the point),
+            ; entering the point is ignored to avoid an invalid value with a trailing point like "123.".
 S4:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='C'?
             BREQ S4RESETIN                  ;
@@ -724,35 +724,35 @@ S4:         LDI R16,'C'                     ;
             EOR R16,KEY                     ; KEY='x'?
             BREQ S4OPERATOR                 ;
 
-S4SKIP:     LDI R16,LOW(S4)                 ; Игнорируем нажатие, остаёмся в текущем состоянии.
+S4SKIP:     LDI R16,LOW(S4)                 ; Ignore the key press, stay in the current state.
             LDI R17,HIGH(S4)                ;
             RJMP S4END                      ;
 
-S4RESETIN:  JMP RESETINPUT                  ; ДАЛЬНИЙ ПРЫЖОК.
+S4RESETIN:  JMP RESETINPUT                  ; Long jump.
 
 S4DECPNT:   MOV R16,LCDLIM                  ; R16=(LCDLIM-2)-S.
             DEC R16                         ;
             DEC R16                         ;
             MOV R17,S                       ;
-            COM R17                         ; Чтобы избежать ситуации "висящей" точки, её допускается ставить только если в строке
-            INC R17                         ; есть место как минимум еще под два знака - под саму точку и под одну цифру после точки.
-            ADD R16,R17                     ; На экране есть место под '.' и как минимум еще одну цифру?
-            BRMI S4SKIP                     ; Нет, игнорируем нажатие точки.
-            LDI R16,LOW(S3)                 ; Да, отображаем точку и переходим в новое состояние.
+            COM R17                         ; To avoid a "trailing" decimal point situation, it is only allowed 
+            INC R17                         ; if there is at least space for two more characters: the point itself and one digit after it.
+            ADD R16,R17                     ; Is there space on the screen for a '.' and at least one more digit?
+            BRMI S4SKIP                     ; No, ignore the decimal point press.
+            LDI R16,LOW(S3)                 ; Yes, display the point and move to the new state.
             LDI R17,HIGH(S3)                ;
             RJMP S4PRNTKEY                  ;
 
-S4DIG09:    MOV R16,S                       ; Если S в текущем состоянии оказался меньше LCDLIM, то в следующем состоянии он будет равен LCDLIM.
+S4DIG09:    MOV R16,S                       ; If S in the current interrupt is one less than LCDLIM, it will equal LCDLIM in the next interrupt.
             EOR R16,LCDLIM                  ; S<LCDLIM?
-            BREQ S4SKIP                     ; Нет, больше цифр ввести нельзя, игнорируем ввод.
-            LDI R16,LOW(S4)                 ; Да, отображаем цифру и остаемся в текущем состоянии,
-            LDI R17,HIGH(S4)                ; ожидая следующего нажатия.
+            BREQ S4SKIP                     ; No, cannot input more digits, ignore the key press.
+            LDI R16,LOW(S4)                 ; Yes, display the digit and stay in the current state,
+            LDI R17,HIGH(S4)                ; waiting for the next key press.
             RJMP S4PRNTKEY                  ;
 
 S4OPERATOR: LDI R16,2                       ;
-            EOR R16,P                       ; Завершен ввод второго операнда?
-            BREQ S4OPERAND2                 ; Да, переходим к конвертации в float32 и вычислению.
-            RJMP OPERAND1                   ; Нет, введен первый операнд, конвертируем его в float.
+            EOR R16,P                       ; Is the second operand input complete?
+            BREQ S4OPERAND2                 ; Yes, convert to float and calculate.
+            RJMP OPERAND1                   ; No, the first operand is entered, convert it to float.
 
 S4OPERAND2: JMP OPERAND2                    ;
 
@@ -763,7 +763,7 @@ S4PRNTKEY:  ST X+,KEY                       ;
             PUSH S                          ;
             PUSH R16                        ;
             PUSH R17                        ;
-            MOV CHAR,KEY                    ; Выводим нажатую клавишу на LCD.
+            MOV CHAR,KEY                    ; Display the pressed key on the LCD.
             RCALL PRNTCHR                   ;
             POP R17                         ;
             POP R16                         ;
@@ -771,11 +771,11 @@ S4PRNTKEY:  ST X+,KEY                       ;
 .ENDIF
 
 .IFDEF EMULKEYPD
-S4END:      POP ZH                          ; Восстанавливаем указатель на тестовую числовую строку.
+S4END:      POP ZH                          ; Restore the pointer to the test numeric string.
             POP ZL                          ;
-            PUSH R16                        ; Запоминаем новое состояние.
+            PUSH R16                        ; Save the new state.
             PUSH R17                        ;
-            PUSH RETL                       ; Восстанавливаем адрес возврата после прерывания.
+            PUSH RETL                       ; Restore the return address from the interrupt.
             PUSH RETH                       ;
             RETI                            ;
 .ELSE
