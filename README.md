@@ -1,7 +1,7 @@
 # Hardware Calculator From Scratch
 Original Russian version is located in [dev](https://github.com/igor-240340/HardwareCalculatorFromScratch/tree/dev) branch.
 
-The project [page](https://hackaday.io/project/197623-hardware-calculator-from-scratch) on Hackaday.
+The project page on [Hackaday](https://hackaday.io/project/197623-hardware-calculator-from-scratch).
 
 This repository contains the complete firmware code for a calculator running on an AVR microcontroller ATmega328P.
 
