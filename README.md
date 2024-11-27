@@ -1,4 +1,5 @@
 # Hardware Calculator From Scratch
+The project [page](https://hackaday.io/project/197623-hardware-calculator-from-scratch) on Hackaday.
 
 Original Russian version is located in [dev](https://github.com/igor-240340/HardwareCalculatorFromScratch/tree/dev) branch.
 
