@@ -1004,7 +1004,7 @@ KEYMAPPRG:  .DB "C0./789x456-123+",0
 
 ;
 ; Test cases for verifying correct keyboard input.
-; The examples are defined in [Траектории на графе состояний и тестовые примеры.xmind].
+; The examples are defined in [State Graph and Test Examples.xmind].
 ; First come the "green" examples, containing valid numeric strings.
 ; Then, with a new numbering, follow the "yellow" examples, containing invalid numeric strings
 ; that must be ignored by the keyboard handler.
