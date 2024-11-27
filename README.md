@@ -15,7 +15,7 @@ The calculator is built upon two custom libraries:
 - **float32avr.asm** - Software emulation of floating-point arithmetic.
 - **lcd1602.asm** - Library for interfacing with the LCD1602 based on the HD44780 controller.
 
-The `float32.asm` repository with documentation can be found [here](https://github.com/igor-240340/Float32AVR).
+The `float32avr.asm` repository with documentation can be found [here](https://github.com/igor-240340/Float32AVR).
 
 The `lcd1602.asm` repository is located [here](https://github.com/igor-240340/LCD1602-HD44780-AVR).
 
@@ -65,7 +65,7 @@ Sources of errors include:
 
 The primary material on the theoretical foundations of the calculator's development and some proofs related to floating-point calculations can be found in [this](docs/HardwareCalculatorFromScratch.%20Research.odt) paper (it's a little messy for now).
 
-More details on the floating-point library `float32.asm` are located in the corresponding repository mentioned earlier.
+More details on the floating-point library `float32avr.asm` are located in the corresponding repository mentioned earlier.
 
 This project also includes a fully functioning simulation in Proteus, which you can find [here](docs/HardwareCalculatorFromScratch.pdsprj):
 
