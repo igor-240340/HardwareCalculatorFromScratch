@@ -13,7 +13,7 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 - **float32avr.asm** - Программная эмуляция плавающей точки.
 - **lcd1602.asm** - Библиотека для работы с ЖК-дисплеем LCD1602 на базе контроллера HD44780.
 
-Репозиторий библиотеки `float32.asm` с документацией находится [здесь](https://github.com/igor-240340/Float32AVR).
+Репозиторий библиотеки `float32avr.asm` с документацией находится [здесь](https://github.com/igor-240340/Float32AVR).
 
 Репозиторий библиотеки `lcd1602.asm` находится [здесь](https://github.com/igor-240340/LCD1602-HD44780-AVR).
 
@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 
 Основной теоретический материал (заметки, доказательства) относящийся к разработке калькулятора и к плавающей точке в частности, находится [здесь](docs/HardwareCalculatorFromScratch.%20Research.odt).
 
-Детали по библиотеке программной эмуляции плавающей точки `float32.asm` находятся в её репозитории.
+Детали по библиотеке программной эмуляции плавающей точки `float32avr.asm` находятся в её репозитории.
 
 Проект включает полностью функционирующую симуляцию в Proteus, которую можно найти [здесь](docs/HardwareCalculatorFromScratch.pdsprj):
 
@@ -83,4 +83,4 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 ## Сборка
 Проект был разработан в устаревшей версии AVR Studio 4 и не проверялся в Microchip Studio for AVR.
 
-[Здесь](https://drive.google.com/open?id=1ui3sfd_ny48FvYHLp-04rkHGDCnqHrAI&usp=drive_fs). можно скачать все архивные инструменты, необходимые для сборки.
+[Здесь](https://drive.google.com/open?id=1ui3sfd_ny48FvYHLp-04rkHGDCnqHrAI&usp=drive_fs) можно скачать все архивные инструменты, необходимые для сборки.
