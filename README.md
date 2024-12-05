@@ -3,9 +3,10 @@
 
 Этот репозиторий содержит полный код прошивки для калькулятора, построенного на базе микроконтроллера AVR ATmega328P.
 
-https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
-
 ![Photo 1](docs/photo_1.jpg)
+![Photo 2](docs/photo_2.jpg)
+
+https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 
 ## Обзор
 
