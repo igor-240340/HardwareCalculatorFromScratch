@@ -5,6 +5,7 @@
 
 ![Photo 1](docs/photo_1.jpg)
 ![Photo 2](docs/photo_2.jpg)
+![Photo 3](docs/photo_3.jpg)
 
 https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 
