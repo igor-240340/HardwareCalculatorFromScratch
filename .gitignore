@@ -3,3 +3,6 @@
 *.map
 *.obj
 *.tmp
+
+# LibreOffice lock file.
+**/.~lock*
