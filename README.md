@@ -87,6 +87,10 @@ Here is a list of software you can use to open files in this folder based on the
 - **.xmind**: Open with Xmind - a Mind Mapping application.
 - **.drawio**: Open with draw.io - a flowchart editor.
 
+## Schematic
+
+![Photo 4](docs/schematic.png)
+
 ## How to assemble
 This project was developed in the deprecated AVR Studio 4 and has not been tested in its successor, Microchip Studio for AVR.
 
