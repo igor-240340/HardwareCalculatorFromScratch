@@ -83,6 +83,10 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 - **.xmind**: Приложение Xmind для майнд-мэппинга.
 - **.drawio**: Открывать в draw.io.
 
+## Принципиальная схема
+
+![Photo 4](docs/schematic.png)
+
 ## Сборка
 Проект был разработан в устаревшей версии AVR Studio 4 и не проверялся в Microchip Studio for AVR.
 
