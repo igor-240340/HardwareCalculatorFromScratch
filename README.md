@@ -22,7 +22,7 @@ The `float32avr.asm` repository with documentation can be found [here](https://g
 
 The `lcd1602.asm` repository is located [here](https://github.com/igor-240340/LCD1602-HD44780-AVR).
 
-This repository contains only copies of the latest versions of the aforementioned libraries.
+This repository contains only copies of the latest versions of the aforementioned libraries (certainly should use [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules), but probably will never do it for this repo).
 
 ## Architecture and Operation
 
