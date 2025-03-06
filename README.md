@@ -1,4 +1,6 @@
 # Hardware Calculator From Scratch
+English version is located in [en](https://github.com/igor-240340/HardwareCalculatorFromScratch/tree/en) branch.
+
 [Страница](https://hackaday.io/project/197623-hardware-calculator-from-scratch) проекта на Hackaday.
 
 Этот репозиторий содержит полный код прошивки для калькулятора, построенного на базе микроконтроллера AVR ATmega328P.
