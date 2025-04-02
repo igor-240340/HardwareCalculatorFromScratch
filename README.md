@@ -29,7 +29,7 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 ![Proteus Schematic](docs/proteus_schematic.png)
 
 ### Дополнительная информация
-Еще есть архив, в котором собраны абсолютно все артефакты, созданные за время разработки калькулятора: диаграммы, иллюстрации, таблицы, заметки и пр. Архив находится [здесь](https://drive.google.com/file/d/1MRdduKBKvt_TL4MoceESYYpDt55LGVwc/view?usp=sharing).
+Еще есть архив, в котором собраны абсолютно все артефакты, созданные за время разработки калькулятора: диаграммы, иллюстрации, таблицы, заметки и пр. Архив находится [здесь](https://archive.org/details/hardware-calculator-from-scratch.-7z_202504). Там хаос, но можно найти что-то полезное и интересное.
 
 Вот список программ для открытия некоторых файлов в этом архиве по их расширениям:
 - **.odt**: LibreOffice Writer.
@@ -85,4 +85,4 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 ## Сборка
 Проект был разработан в устаревшей версии AVR Studio 4 и не проверялся в Microchip Studio for AVR.
 
-[Здесь](https://drive.google.com/file/d/1ui3sfd_ny48FvYHLp-04rkHGDCnqHrAI/view?usp=sharing) можно скачать все архивные инструменты, необходимые для сборки.
+[Здесь](https://archive.org/details/avr.7z) можно скачать все архивные инструменты, необходимые для сборки.
