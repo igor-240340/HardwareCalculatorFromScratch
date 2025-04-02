@@ -30,7 +30,7 @@ This project also includes a fully functioning simulation in Proteus, which you 
 
 ### Additional info
 
-There is an archive that contains all artifacts that have been created during development of the calculator: diagrams, illustrations, tables, notes etc. The archive can be found [here](https://drive.google.com/file/d/1MRdduKBKvt_TL4MoceESYYpDt55LGVwc/view?usp=sharing). It's total mess, but it can be insightful.
+There is an archive that contains all artifacts that have been created during development of the calculator: diagrams, illustrations, tables, notes etc. The archive can be found [here](https://archive.org/details/hardware-calculator-from-scratch.-7z_202504). It's total mess, but it can be insightful.
 
 Here is a list of software you can use to open files in this folder based on their extensions:
 - **.odt**: Open with LibreOffice Writer or any compatible text editor.
@@ -86,4 +86,4 @@ Sources of errors include:
 ## How to assemble
 This project was developed in the deprecated AVR Studio 4 and has not been tested in its successor, Microchip Studio for AVR.
 
-Here you'll find all the archived tools necessary to assemble this project: [download](https://drive.google.com/open?id=1ui3sfd_ny48FvYHLp-04rkHGDCnqHrAI&usp=drive_fs).
+Here you'll find all the archived tools necessary to assemble this project: [download](https://archive.org/details/avr.7z).
