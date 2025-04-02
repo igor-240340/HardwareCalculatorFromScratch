@@ -5,10 +5,6 @@ The project page on [Hackaday](https://hackaday.io/project/197623-hardware-calcu
 
 This repository contains the complete firmware code for a calculator running on an AVR microcontroller ATmega328P.
 
-![Photo 1](docs/photo_1.jpg)
-![Photo 2](docs/photo_2.jpg)
-![Photo 3](docs/photo_3.jpg)
-
 https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 
 ## Overview
@@ -23,6 +19,25 @@ The `float32avr.asm` repository with documentation can be found [here](https://g
 The `lcd1602.asm` repository is located [here](https://github.com/igor-240340/LCD1602-HD44780-AVR).
 
 This repository contains only copies of the latest versions of the aforementioned libraries (certainly, should use [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules), but will probably never do it for this repo).
+
+## Project Documentation
+
+There is the tutorial in which described all the theory behind the calculator: binary arithmetic, software emulation of floating point, input/output etc.). It can be find [here](docs/Hardware%20Calculator%20From%20Scratch.%20The%20Tutorial.odt).
+
+This project also includes a fully functioning simulation in Proteus, which you can find [here](docs/HardwareCalculatorFromScratch.pdsprj):
+
+![Proteus Schematic](docs/proteus_schematic.png)
+
+### Additional info
+
+There is an archive that contains all artifacts that have been created during development of the calculator: diagrams, illustrations, tables, notes etc. The archive can be found [here](https://drive.google.com/file/d/1MRdduKBKvt_TL4MoceESYYpDt55LGVwc/view?usp=sharing). It's total mess, but it can be insightful.
+
+Here is a list of software you can use to open files in this folder based on their extensions:
+- **.odt**: Open with LibreOffice Writer or any compatible text editor.
+- **.ods**: Open with LibreOffice Calc. These files contain a simulation of a binary grid and include BASIC macros for binary arithmetic calculations. They might work with Excel and other compatible spreadsheet editors, but I didn't check, so I recommend using LibreOffice Calc. These macros have been very helpful, so it's worth exploring them to understand how they work.
+- **.drt**: Open with IS Drakon (ИС Дракон) - a Soviet-era flowchart editor and notation system. It is more convenient than classic flowcharts. You can download the binaries [here](https://cloud.mail.ru/public/ecbde70c784a/%D0%98%D0%A1%20%D0%94%D1%80%D0%B0%D0%BA%D0%BE%D0%BD).
+- **.xmind**: Open with Xmind - a Mind Mapping application.
+- **.drawio**: Open with draw.io - a flowchart editor.
 
 ## Architecture and Operation
 
@@ -63,29 +78,6 @@ Sources of errors include:
   - During calculations, due to the limited precision grid, the result is inevitably rounded (by default to the nearest, with ties going to the even number).
 - **Conversion of a decimal string to binary floating-point format**: Since the conversion is based on a naive scheme that does not use arbitrary-precision arithmetic but relies on the same single-precision floating-point emulation used for calculations, rounding of intermediate values can occur during conversion, leading to distortions in the original decimal value entered by the user (even if the original decimal number can be exactly represented in binary).
 - **Conversion of a floating-point number to a decimal string**: Although any binary number in `float` format can have its exact decimal representation derived, in this calculator, as with the string-to-float conversion, a naive scheme based on single-precision float is used, so rounding of intermediate values can occur during conversion, ultimately distorting the entire value and specific decimal digits.
-
-## Project Documentation
-
-The primary material on the theoretical foundations of the calculator's development and some proofs related to floating-point calculations can be found in [this](docs/HardwareCalculatorFromScratch.%20Research.odt) paper (it's a little messy for now).
-
-More details on the floating-point library `float32avr.asm` are located in the corresponding repository mentioned earlier.
-
-This project also includes a fully functioning simulation in Proteus, which you can find [here](docs/HardwareCalculatorFromScratch.pdsprj):
-
-![Proteus Schematic](docs/proteus_schematic.png)
-
-More research notes and corresponding educational material will be added later when they are in good condition and translated into English.
-
-If you intrested in tinkering with this project by yourself, here is all material that has been created during development of the calculator: [download](https://drive.google.com/file/d/1reeEPcQ95P3t-i-bTYWgDMNL65eEh_6R/view?usp=drive_fs). It's a total mess but may contain something interesting.
-
-For your convenience, I've collected some fundamental research notes and included them directly in this repository: [docs/Basic Research Notes](docs/Basic%20Research%20Notes).
-
-Here is a list of software you can use to open files in this folder based on their extensions:
-- **.odt**: Open with LibreOffice Writer or any compatible text editor.
-- **.ods**: Open with LibreOffice Calc. These files contain a simulation of a binary grid and include BASIC macros for binary arithmetic calculations. They might work with Excel and other compatible spreadsheet editors, but I didn't check, so I recommend using LibreOffice Calc. These macros have been very helpful, so it's worth exploring them to understand how they work.
-- **.drt**: Open with IS Drakon (ИС Дракон) - a Soviet-era flowchart editor and notation system. It is more convenient than classic flowcharts. You can download the binaries [here](https://cloud.mail.ru/public/ecbde70c784a/%D0%98%D0%A1%20%D0%94%D1%80%D0%B0%D0%BA%D0%BE%D0%BD).
-- **.xmind**: Open with Xmind - a Mind Mapping application.
-- **.drawio**: Open with draw.io - a flowchart editor.
 
 ## Schematic
 
