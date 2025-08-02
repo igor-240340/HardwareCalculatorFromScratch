@@ -92,3 +92,4 @@ Here you'll find all the archived tools necessary to assemble this project: [dow
 Fixed-point arithmetic implementation can be found [here](https://github.com/igor-240340/FixedPointArithmetic).  
 Binary-coded decimal arithmetic (BCD) implementation can be found [here](https://github.com/igor-240340/BCDArithmetic).  
 Approximation of some elementary functions (sin/cos/sqrt) can be found [here](https://github.com/igor-240340/FunctionApproximation).  
+Random number generator implementation can be found [here](https://github.com/igor-240340/RandomNumberGeneration).  
