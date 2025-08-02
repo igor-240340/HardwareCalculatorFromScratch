@@ -88,8 +88,6 @@ https://github.com/user-attachments/assets/c9621d69-dfed-499c-8f88-36c1198a2822
 [Здесь](https://archive.org/details/avr.7z) можно скачать все архивные инструменты, необходимые для сборки.
 
 ## Дополнительно
-Реализация арифметики с фиксированной точкой (двоичная, десятичная) находится [здесь](https://github.com/igor-240340/FixedPointArithmetic).
-
-Реализация двоично-десятичной арифметики (BCD) находится [здесь](https://github.com/igor-240340/BCDArithmetic).
-
-Реализация вычисления элементарных функций (sin/cos/sqrt) находится [здесь](https://github.com/igor-240340/FunctionApproximation).
+Реализация арифметики с фиксированной точкой (двоичная, десятичная) находится [здесь](https://github.com/igor-240340/FixedPointArithmetic).  
+Реализация двоично-десятичной арифметики (BCD) находится [здесь](https://github.com/igor-240340/BCDArithmetic).  
+Реализация вычисления элементарных функций (sin/cos/sqrt) находится [здесь](https://github.com/igor-240340/FunctionApproximation).  
